@@ -1,0 +1,4 @@
+(executable
+ (public_name rewrite_bindlib)
+ (name main)
+ (libraries rewrite_bindlib))
