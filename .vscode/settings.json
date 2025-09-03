@@ -1,6 +1,8 @@
 {
     "[ocaml]": {
-        "editor.tabSize": 2
+        "editor.tabSize": 2,
+        "editor.codeLens": false,
+        "editor.inlayHints.enabled": "offUnlessPressed",
     },
     "files.trimTrailingWhitespace": true,
     "files.insertFinalNewline": true,

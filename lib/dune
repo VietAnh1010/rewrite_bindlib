@@ -1,4 +1,4 @@
 (library
  (name rewrite_bindlib)
- (modules syntax)
+ (modules syntax pretty)
  (libraries bindlib))
