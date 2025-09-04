@@ -8,7 +8,7 @@ type term =
   | TUnit
   | TBool of bool
   | TInt of int
-  | TLambda of staged_spec_binder
+  | TFun of staged_spec_binder
   | TMetavar of meta
 
 and state =
@@ -18,6 +18,7 @@ and state =
 and staged_spec =
   | Return of term
   | Ensures of state
+  | Sequence of staged_spec * staged_spec
   | Bind of staged_spec * staged_spec_binder
   | Apply of term * term
   | Disjunct of staged_spec * staged_spec
@@ -39,7 +40,7 @@ module Constructors = struct
   let mk_tunit = box TUnit
   let mk_tbool = box_apply (fun b -> TBool b)
   let mk_tint = box_apply (fun i -> TInt i)
-  let mk_tlambda = box_apply (fun b -> TLambda b)
+  let mk_tfun = box_apply (fun b -> TFun b)
   let mk_tmetavar = box_apply (fun m -> TMetavar m)
 
   let mk_state = box STState
@@ -49,6 +50,7 @@ module Constructors = struct
 
   let mk_return = box_apply (fun t -> Return t)
   let mk_ensures = box_apply (fun st -> Ensures st)
+  let mk_sequence = box_apply2 (fun s1 s2 -> Sequence (s1, s2))
   let mk_bind = box_apply2 (fun s b -> Bind (s, b))
   let mk_apply = box_apply2 (fun f t -> Apply (f, t))
   let mk_disjunct = box_apply2 (fun s1 s2 -> Disjunct (s1, s2))
@@ -70,7 +72,7 @@ module Constructors = struct
     | TUnit -> mk_tunit
     | TBool b -> mk_tbool (box b)
     | TInt i -> mk_tint (box i)
-    | TLambda b -> mk_tlambda (box_staged_spec_binder b)
+    | TFun b -> mk_tfun (box_staged_spec_binder b)
     | TMetavar m -> mk_tmetavar (box_meta m)
 
   and box_state = function
@@ -80,6 +82,7 @@ module Constructors = struct
   and box_staged_spec = function
     | Return t -> mk_return (box_term t)
     | Ensures st -> mk_ensures (box_state st)
+    | Sequence (s1, s2) -> mk_sequence (box_staged_spec s1) (box_staged_spec s2)
     | Bind (s, b) -> mk_bind (box_staged_spec s) (box_staged_spec_binder b)
     | Apply (f, t) -> mk_apply (box_term f) (box_term t)
     | Disjunct (s1, s2) -> mk_disjunct (box_staged_spec s1) (box_staged_spec s2)
@@ -106,9 +109,21 @@ module Examples = struct
         (bind_var f
           (mk_bind
             (mk_return mk_tunit)
-            (mk_binder
-              (bind_var v
-              (mk_apply (mk_tvar f) (mk_tvar v)))))))
+            (mk_binder (bind_var v (mk_apply (mk_tvar f) (mk_tvar v)))))))
 
   let ex1 = unbox ex1_box
+
+  let ex2_box =
+    let x = new_tvar "x" in
+    let f = new_tvar "f" in
+    let v = new_tvar "v" in
+    mk_bind
+      (mk_return (mk_tfun (mk_binder (bind_var x (mk_return (mk_tvar x))))))
+      (mk_binder
+        (bind_var f
+          (mk_bind
+            (mk_return (mk_tint (box 1)))
+            (mk_binder (bind_var v (mk_apply (mk_tvar f) (mk_tvar v)))))))
+
+  let ex2 = unbox ex2_box
 end
