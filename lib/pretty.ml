@@ -11,6 +11,10 @@ let rec string_of_term_in (ctxt : ctxt) = function
       string_of_bool b
   | TInt i ->
       string_of_int i
+  | TPair (t1, t2) ->
+      let t1_str = string_of_term_in ctxt t1 in
+      let t2_str = string_of_term_in ctxt t2 in
+      Format.sprintf "(%s, %s)" t1_str t2_str
   | TFun b ->
       let b_str = string_of_staged_spec_binder_in ctxt b in
       Format.sprintf "(\\%s)" b_str
@@ -55,10 +59,10 @@ and string_of_staged_spec_in (ctxt : ctxt) = function
   | Reset s ->
       let s_str = string_of_staged_spec_in ctxt s in
       Format.sprintf "reset (%s)" s_str
-  | Dollar (s, cont) ->
+  | Dollar (s, k) ->
       let s_str = string_of_staged_spec_in ctxt s in
-      let cont_str = string_of_staged_spec_binder_in ctxt cont in
-      Format.sprintf "dollar (%s, %s)" s_str cont_str
+      let k_str = string_of_staged_spec_binder_in ctxt k in
+      Format.sprintf "dollar (%s, %s)" s_str k_str
   | SMetavar _ ->
       "<smetavar>"
 
@@ -72,3 +76,4 @@ and string_of_staged_spec_binder_in (ctxt : ctxt) = function
       "<sbmetavar>"
 
 let string_of_staged_spec = string_of_staged_spec_in empty_ctxt
+let string_of_staged_spec_binder = string_of_staged_spec_binder_in empty_ctxt
