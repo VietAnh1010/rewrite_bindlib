@@ -3,13 +3,17 @@ open Syntax
 open Pretty
 open Simpl
 
-
-let test_simpl_staged_spec (s : staged_spec) : unit =
-  Format.printf "%s\n>>> simpl_staged_spec >>>\n%s"
-    (string_of_staged_spec s)
-    (string_of_staged_spec (simpl_staged_spec s))
-
-let%expect_test _ =
+let%expect_test "simpl_staged_spec" =
+  let test_simpl_staged_spec (s : staged_spec) =
+    Format.printf
+      {|
+        %s
+        >>> simpl_staged_spec >>>
+        %s
+      |}
+      (string_of_staged_spec s)
+      (string_of_staged_spec (simpl_staged_spec s))
+  in
   let open Examples in
   let () =
     test_simpl_staged_spec ex1;

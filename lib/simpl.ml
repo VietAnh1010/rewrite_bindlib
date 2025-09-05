@@ -2,7 +2,7 @@
 
 open Syntax
 open Bindlib
-open Binders
+open StagedSpecBinder
 open Constructors
 
 let identity_cont =
@@ -52,7 +52,7 @@ and simpl_staged_spec (s : staged_spec) : staged_spec =
       begin
         match f with
         | TFun b ->
-            simpl_staged_spec (subst_binder b t)
+            simpl_staged_spec (subst b t)
         | _ ->
             let f = simpl_term f in
             Apply (f, t)
@@ -92,10 +92,10 @@ and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_
     (Pretty.string_of_staged_spec_binder cont); *)
   match s with
   | Return t ->
-      simpl_staged_spec (subst_binder cont t)
+      simpl_staged_spec (subst cont t)
   | Ensures st ->
       let st = simpl_state st in
-      let cont = simpl_staged_spec (subst_binder cont TUnit) in
+      let cont = simpl_staged_spec (subst cont TUnit) in
       Sequence (Ensures st, cont)
   | Sequence (s1, s2) ->
       simpl_staged_spec_cont ~delimited s1 (simpl_staged_spec_binder_cont ~delimited (Ignore s2) cont)
@@ -106,10 +106,10 @@ and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_
       begin
         match f with
         | TFun b ->
-            simpl_staged_spec_cont ~delimited (subst_binder b t) cont
+            simpl_staged_spec_cont ~delimited (subst b t) cont
         | _ ->
             let f = simpl_term f in
-            prepend_binder ~delimited cont (Apply (f, t))
+            prepend ~delimited cont (Apply (f, t))
       end
   | Disjunct (s1, s2) ->
       let s1 = simpl_staged_spec_cont ~delimited s1 cont in
@@ -120,10 +120,10 @@ and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_
       Exists b
   | Shift b ->
       if delimited then
-        simpl_staged_spec_cont ~delimited (subst_binder b (TFun cont)) identity_cont
+        simpl_staged_spec_cont ~delimited (subst b (TFun cont)) identity_cont
       else
         let b = simpl_staged_spec_binder b in
-        prepend_binder ~delimited cont (Shift b)
+        prepend ~delimited cont (Shift b)
   | Reset s ->
       simpl_staged_spec_cont ~delimited (simpl_staged_spec_cont ~delimited:true s identity_cont) cont
   | Dollar (s, k) ->

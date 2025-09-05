@@ -2,11 +2,20 @@
 open Syntax
 open Bindlib
 
+let string_of_meta (m : meta) = Format.sprintf "?%s" m.m_name
+let string_of_symbol (s : symbol) = s.s_name
+
+let string_of_sort = function
+  | Term -> "Term"
+  | State -> "State"
+  | StagedSpec -> "StagedSpec"
+  | StagedSpecBinder -> "StagedSpecBinder"
+
 let rec string_of_term_in (ctxt : ctxt) = function
   | TVar x ->
       name_of x
   | TSymbol s ->
-      s.s_name
+      string_of_symbol s
   | TUnit ->
       "()"
   | TBool b ->
@@ -20,14 +29,14 @@ let rec string_of_term_in (ctxt : ctxt) = function
   | TFun b ->
       let b_str = string_of_staged_spec_binder_in ctxt b in
       Format.sprintf "(\\%s)" b_str
-  | TMetavar _ ->
-      "<tmetavar>"
+  | TMetavar m ->
+      string_of_meta m
 
 and string_of_state_in (_ctxt : ctxt) = function
   | StState ->
       "<ststate>"
-  | StMetavar _ ->
-      "<stmetavar>"
+  | StMetavar m ->
+      string_of_meta m
 
 and string_of_staged_spec_in (ctxt : ctxt) = function
   | Return t ->
@@ -65,8 +74,8 @@ and string_of_staged_spec_in (ctxt : ctxt) = function
       let s_str = string_of_staged_spec_in ctxt s in
       let k_str = string_of_staged_spec_binder_in ctxt k in
       Format.sprintf "dollar (%s, %s)" s_str k_str
-  | SMetavar _ ->
-      "<smetavar>"
+  | SMetavar m ->
+      string_of_meta m
 
 and string_of_staged_spec_binder_in (ctxt : ctxt) = function
   | Ignore s ->
@@ -77,8 +86,10 @@ and string_of_staged_spec_binder_in (ctxt : ctxt) = function
       let x_str = name_of x in
       let s_str = string_of_staged_spec_in ctxt s in
       Format.sprintf "%s. %s" x_str s_str
-  | SBMetavar _ ->
-      "<sbmetavar>"
+  | SBMetavar m ->
+      string_of_meta m
 
+let string_of_term = string_of_term_in empty_ctxt
+let string_of_state = string_of_state_in empty_ctxt
 let string_of_staged_spec = string_of_staged_spec_in empty_ctxt
 let string_of_staged_spec_binder = string_of_staged_spec_binder_in empty_ctxt
