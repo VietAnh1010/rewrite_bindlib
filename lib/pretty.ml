@@ -5,6 +5,8 @@ open Bindlib
 let rec string_of_term_in (ctxt : ctxt) = function
   | TVar x ->
       name_of x
+  | TSymbol s ->
+      s.s_name
   | TUnit ->
       "()"
   | TBool b ->

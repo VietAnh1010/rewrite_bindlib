@@ -13,6 +13,8 @@ let rec simpl_term (t : term) : term =
   match t with
   | TVar _ ->
       t
+  | TSymbol _ ->
+      t
   | TUnit ->
       t
   | TBool _ ->

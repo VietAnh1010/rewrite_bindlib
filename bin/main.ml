@@ -5,7 +5,6 @@ let print_staged_spec s =
   print_endline (string_of_staged_spec s)
 
 let () =
-  let open Syntax in
   let open Examples in
   let open Simpl in
   (* print_staged_spec (simpl_staged_spec ex2);

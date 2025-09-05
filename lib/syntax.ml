@@ -3,8 +3,12 @@ open Bindlib
 type meta =
   | Meta
 
+type symbol =
+  { s_name : string }
+
 type term =
   | TVar of term var
+  | TSymbol of symbol
   | TUnit
   | TBool of bool
   | TInt of int
@@ -39,9 +43,10 @@ module Constructors = struct
   let new_tvar = new_var (fun v -> TVar v)
 
   let mk_tvar = box_var
+  let mk_tsymbol s = box (TSymbol s)
   let mk_tunit = box TUnit
-  let mk_tbool = box_apply (fun b -> TBool b)
-  let mk_tint = box_apply (fun i -> TInt i)
+  let mk_tbool b = box (TBool b)
+  let mk_tint i = box (TInt i)
   let mk_tpair = box_apply2 (fun t1 t2 -> TPair (t1, t2))
   let mk_tfun = box_apply (fun b -> TFun b)
   let mk_tmetavar = box_apply (fun m -> TMetavar m)
@@ -73,9 +78,10 @@ module Constructors = struct
 
   let rec box_term = function
     | TVar x -> mk_tvar x
+    | TSymbol s -> mk_tsymbol s
     | TUnit -> mk_tunit
-    | TBool b -> mk_tbool (box b)
-    | TInt i -> mk_tint (box i)
+    | TBool b -> mk_tbool b
+    | TInt i -> mk_tint i
     | TPair (t1, t2) -> mk_tpair (box_term t1) (box_term t2)
     | TFun b -> mk_tfun (box_staged_spec_binder b)
     | TMetavar m -> mk_tmetavar (box_meta m)
