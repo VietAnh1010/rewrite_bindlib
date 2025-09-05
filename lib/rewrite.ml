@@ -4,6 +4,7 @@ open Pretty
 open Sort
 open Util
 open Constructors
+open Visitor
 
 type uobj =
   | UTerm of term
@@ -257,37 +258,60 @@ let sort_of_rule = function
 
 let string_of_rule_sort rule = string_of_sort (sort_of_rule rule)
 
-let rewrite_rooted_with unify subst {lhs; rhs} target =
-  let sigma = unify lhs target in
-  match rhs with
-  | Static rhs -> subst sigma rhs
-  | Dynamic rhs -> rhs sigma
+exception Rewrite_failure of exn
 
-let rewrite_rooted_term = rewrite_rooted_with unify_term subst_term
-let rewrite_rooted_state = rewrite_rooted_with unify_state subst_state
+let rewrite_failure exn = raise (Rewrite_failure exn)
 
-let rewrite_rooted_staged_spec =
-  rewrite_rooted_with unify_staged_spec subst_staged_spec
+let rewrite_with unify subst rule_desc target =
+  try
+    let sigma = unify rule_desc.lhs target in
+    match rule_desc.rhs with
+    | Static rhs -> subst sigma rhs
+    | Dynamic rhs -> rhs sigma
+  with exn -> rewrite_failure exn
 
-let rewrite_rooted_staged_spec_binder =
-  rewrite_rooted_with unify_staged_spec_binder subst_staged_spec_binder
+let rewrite_term = rewrite_with unify_term subst_term
+let rewrite_state = rewrite_with unify_state subst_state
+let rewrite_staged_spec = rewrite_with unify_staged_spec subst_staged_spec
 
-let rewrite_rooted (rule : rule) (target : uobj) =
-  match rule, target with
-  | RTerm rule, UTerm target ->
-      let result = rewrite_rooted_term rule target in
-      UTerm result
-  | RState rule, UState target ->
-      let result = rewrite_rooted_state rule target in
-      UState result
-  | RStagedSpec rule, UStagedSpec target ->
-      let result = rewrite_rooted_staged_spec rule target in
-      UStagedSpec result
-  | RStagedSpecBinder rule, UStagedSpecBinder target ->
-      let result = rewrite_rooted_staged_spec_binder rule target in
-      UStagedSpecBinder result
-  | _, _ ->
-      sort_mismatch
-        (Format.sprintf "cannot rewrite object of sort %s with rule of sort %s"
-           (string_of_uobj_sort target)
-           (string_of_rule_sort rule))
+let rewrite_staged_spec_binder =
+  rewrite_with unify_staged_spec_binder subst_staged_spec_binder
+
+let rewrite_term_visitor rule_desc =
+  object
+    inherit [_] abstract_map_visitor as super
+    method! visit_term () t =
+      try rewrite_term rule_desc t
+      with Rewrite_failure _ -> super#visit_term () t
+  end
+
+let rewrite_state_visitor rule_desc =
+  object
+    inherit [_] abstract_map_visitor as super
+    method! visit_state () st =
+      try rewrite_state rule_desc st
+      with Rewrite_failure _ -> super#visit_state () st
+  end
+
+let rewrite_staged_spec_visitor rule_desc =
+  object
+    inherit [_] abstract_map_visitor as super
+    method! visit_staged_spec () s =
+      try rewrite_staged_spec rule_desc s
+      with Rewrite_failure _ -> super#visit_staged_spec () s
+  end
+
+let rewrite_staged_spec_binder_visitor rule_desc =
+  object
+    inherit [_] abstract_map_visitor as super
+    method! visit_staged_spec_binder () b =
+      try rewrite_staged_spec_binder rule_desc b
+      with Rewrite_failure _ -> super#visit_staged_spec_binder () b
+  end
+
+let rewrite_visitor rule =
+  match rule with
+  | RTerm rule_desc -> rewrite_term_visitor rule_desc
+  | RState rule_desc -> rewrite_state_visitor rule_desc
+  | RStagedSpec rule_desc -> rewrite_staged_spec_visitor rule_desc
+  | RStagedSpecBinder rule_desc -> rewrite_staged_spec_binder_visitor rule_desc
