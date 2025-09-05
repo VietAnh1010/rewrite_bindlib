@@ -104,7 +104,6 @@ module Constructors = struct
 end
 
 module Binders = struct
-  open Constructors
 
   let subst_binder (b : staged_spec_binder) (t : term) : staged_spec =
     match b with
@@ -120,9 +119,4 @@ module Binders = struct
       | Ignore s' -> Sequence (s, s')
       | Binder _ -> Bind (s, b)
       | SBMetavar _ -> assert false
-
-  let ignored_var = new_tvar "_"
-
-  let mk_ignored_binder (s : staged_spec) : staged_spec_binder =
-    unbox (mk_binder (bind_var ignored_var (box_staged_spec s)))
 end

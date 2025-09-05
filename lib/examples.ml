@@ -9,6 +9,7 @@ module Vars = struct
   let y = new_tvar "y"
   let i = new_tvar "i"
   let k = new_tvar "k"
+  let g = new_tvar "g"
 end
 
 open Vars
@@ -142,3 +143,12 @@ let ex12_box =
     (mk_binder (bind_var x (mk_apply (mk_tvar f) (mk_tvar x))))
 
 let ex12 = unbox ex12_box
+
+let ex13_box =
+  mk_bind
+    (mk_bind
+      (mk_apply (mk_tvar f) (mk_tunit))
+      (mk_binder (bind_var x (mk_apply (mk_tvar k) (mk_tint (box 1))))))
+    (mk_binder (bind_var y (mk_apply (mk_tvar g) (mk_tvar y))))
+
+let ex13 = unbox ex13_box

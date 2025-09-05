@@ -107,4 +107,12 @@ let%expect_test _ =
       ((ensures <ststate>; f 10) \/ f 42)
       |}]
   in
+  let () =
+    test_simpl_staged_spec ex13;
+    [%expect {|
+      ((f (); x. k 1); y. g y)
+      >>> simpl_staged_spec >>>
+      (f (); x. (k 1; y. g y))
+      |}]
+  in
   ()
