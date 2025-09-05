@@ -1,10 +1,7 @@
 open Bindlib
 
-type metavar =
-  { mv_name : string }
-
-type symbol =
-  { s_name : string }
+type metavar = {mv_name : string}
+type symbol = {s_name : string}
 
 type term =
   | TVar of term var
@@ -16,9 +13,7 @@ type term =
   | TFun of staged_spec_binder
   | TMetavar of metavar
 
-and state =
-  | StState
-  | StMetavar of metavar
+and state = StState | StMetavar of metavar
 
 and staged_spec =
   | Return of term
@@ -38,11 +33,7 @@ and staged_spec_binder =
   | Binder of (term, staged_spec) binder
   | SBMetavar of metavar
 
-type sort =
-  | Term
-  | State
-  | StagedSpec
-  | StagedSpecBinder
+type sort = Term | State | StagedSpec | StagedSpecBinder
 
 module Constructors = struct
   let new_tvar = new_var (fun v -> TVar v)
@@ -115,9 +106,9 @@ module StagedSpecBinder = struct
     | Binder b -> subst b t
     | SBMetavar _ -> assert false
 
-  let compose ~(delimited : bool) (b : staged_spec_binder) (s : staged_spec) : staged_spec =
-    if delimited then
-      Dollar (s, b)
+  let compose ~(delimited : bool) (b : staged_spec_binder) (s : staged_spec) :
+      staged_spec =
+    if delimited then Dollar (s, b)
     else
       match b with
       | Ignore s' -> Sequence (s, s')
@@ -127,6 +118,7 @@ end
 
 module Metavar = struct
   type t = metavar
+
   let equal (mv1 : t) (mv2 : t) = String.equal mv1.mv_name mv2.mv_name
   let compare (mv1 : t) (mv2 : t) = String.compare mv1.mv_name mv2.mv_name
   let hash (mv : t) = String.hash mv.mv_name
@@ -134,6 +126,7 @@ end
 
 module Symbol = struct
   type t = symbol
+
   let equal (s1 : t) (s2 : t) = String.equal s1.s_name s2.s_name
   let compare (s1 : t) (s2 : t) = String.compare s1.s_name s2.s_name
   let hash (s : t) = String.hash s.s_name
@@ -141,6 +134,8 @@ end
 
 module Sort = struct
   exception Invalid_sort of string
+  exception Sort_mismatch of string
 
   let invalid_sort msg = raise (Invalid_sort msg)
+  let sort_mismatch msg = raise (Sort_mismatch msg)
 end

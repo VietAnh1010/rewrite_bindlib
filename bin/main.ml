@@ -20,4 +20,4 @@ let () =
   print_staged_spec (simpl_staged_spec_cont ~delimited:true ex9 identity_cont); *)
   print_staged_spec (simpl_staged_spec ex10);
   print_staged_spec (simpl_staged_spec ex11);
-  print_staged_spec (simpl_staged_spec ex12);
+  print_staged_spec (simpl_staged_spec ex12)

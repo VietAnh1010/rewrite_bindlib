@@ -78,8 +78,7 @@ let ex5 = unbox ex5_box
 let ex6_box =
   mk_reset
     (mk_bind
-       (mk_shift
-          (mk_binder (bind_var k (mk_apply (mk_tvar k) (mk_tint 10)))))
+       (mk_shift (mk_binder (bind_var k (mk_apply (mk_tvar k) (mk_tint 10)))))
        (mk_binder
           (bind_var x
              (mk_bind
@@ -89,8 +88,7 @@ let ex6_box =
                       (mk_sequence
                          (mk_sequence (mk_ensures mk_ststate)
                             (mk_apply (mk_tvar f) mk_tunit))
-                         (mk_return
-                            (mk_tpair (mk_tvar x) (mk_tbool true))))))))))
+                         (mk_return (mk_tpair (mk_tvar x) (mk_tbool true))))))))))
 
 let ex6 = unbox ex6_box
 
@@ -129,9 +127,7 @@ let ex11_box =
     (mk_apply (mk_tvar f) mk_tunit)
     (mk_binder
        (bind_var x
-          (mk_disjunct
-             (mk_return (mk_tint 10))
-             (mk_return (mk_tint 42)))))
+          (mk_disjunct (mk_return (mk_tint 10)) (mk_return (mk_tint 42)))))
 
 let ex11 = unbox ex11_box
 
@@ -147,8 +143,8 @@ let ex12 = unbox ex12_box
 let ex13_box =
   mk_bind
     (mk_bind
-      (mk_apply (mk_tvar f) (mk_tunit))
-      (mk_binder (bind_var x (mk_apply (mk_tvar k) (mk_tint 1)))))
+       (mk_apply (mk_tvar f) mk_tunit)
+       (mk_binder (bind_var x (mk_apply (mk_tvar k) (mk_tint 1)))))
     (mk_binder (bind_var y (mk_apply (mk_tvar g) (mk_tvar y))))
 
 let ex13 = unbox ex13_box

@@ -1,0 +1,11 @@
+profile = default
+
+break-cases = fit-or-vertical
+exp-grouping = preserve
+parens-tuple = multi-line-only
+space-around-arrays = false
+space-around-lists = false
+space-around-records = false
+space-around-variants = false
+module-item-spacing = preserve
+margin = 80

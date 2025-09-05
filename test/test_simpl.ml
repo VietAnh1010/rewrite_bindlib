@@ -17,7 +17,8 @@ let%expect_test "simpl_staged_spec" =
   let open Examples in
   let () =
     test_simpl_staged_spec ex1;
-    [%expect {|
+    [%expect
+      {|
       (return k; f. (return (); v. f v))
       >>> simpl_staged_spec >>>
       k ()
@@ -25,7 +26,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex2;
-    [%expect {|
+    [%expect
+      {|
       (return (\x. return x); f. (return 1; v. f v))
       >>> simpl_staged_spec >>>
       return 1
@@ -33,7 +35,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex3;
-    [%expect {|
+    [%expect
+      {|
       reset ((ensures <ststate>; ((shift k. return k); x. return 10)))
       >>> simpl_staged_spec >>>
       (ensures <ststate>; return (\x. return 10))
@@ -41,7 +44,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex4;
-    [%expect {|
+    [%expect
+      {|
       reset ((exists i. ((shift k. return k); x. return i)))
       >>> simpl_staged_spec >>>
       (exists i. return (\x. return i))
@@ -49,7 +53,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex5;
-    [%expect {|
+    [%expect
+      {|
       (reset (((shift k. return k); x. ((shift k. return k); y. return (x, y)))); f. (f 10; f1. f1 3))
       >>> simpl_staged_spec >>>
       return (10, 3)
@@ -57,7 +62,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex6;
-    [%expect {|
+    [%expect
+      {|
       reset (((shift k. k 10); x. ((shift k. return k); y. ((ensures <ststate>; f ()); return (x, true)))))
       >>> simpl_staged_spec >>>
       return (\y. (ensures <ststate>; dollar (f (), _. return (10, true))))
@@ -65,7 +71,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex7;
-    [%expect {|
+    [%expect
+      {|
       (shift k. (return true; k ()))
       >>> simpl_staged_spec >>>
       (shift k. k ())
@@ -73,7 +80,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex8;
-    [%expect {|
+    [%expect
+      {|
       ((ensures <ststate>; ensures <ststate>); return 10)
       >>> simpl_staged_spec >>>
       (ensures <ststate>; (ensures <ststate>; return 10))
@@ -81,7 +89,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex9;
-    [%expect {|
+    [%expect
+      {|
       ((shift k. (return true; k ())); return 10)
       >>> simpl_staged_spec >>>
       ((shift k. k ()); return 10)
@@ -89,7 +98,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex10;
-    [%expect {|
+    [%expect
+      {|
       (f (); x. (exists y. return (x, y)))
       >>> simpl_staged_spec >>>
       (f (); x. (exists y. return (x, y)))
@@ -97,7 +107,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex11;
-    [%expect {|
+    [%expect
+      {|
       (f (); x. (return 10 \/ return 42))
       >>> simpl_staged_spec >>>
       (f (); x. (return 10 \/ return 42))
@@ -105,7 +116,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex12;
-    [%expect {|
+    [%expect
+      {|
       (((ensures <ststate>; return 10) \/ return 42); x. f x)
       >>> simpl_staged_spec >>>
       ((ensures <ststate>; f 10) \/ f 42)
@@ -113,7 +125,8 @@ let%expect_test "simpl_staged_spec" =
   in
   let () =
     test_simpl_staged_spec ex13;
-    [%expect {|
+    [%expect
+      {|
       ((f (); x. k 1); y. g y)
       >>> simpl_staged_spec >>>
       (f (); x. (k 1; y. g y))

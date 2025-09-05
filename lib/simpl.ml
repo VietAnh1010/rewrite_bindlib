@@ -11,16 +11,11 @@ let identity_cont =
 
 let rec simpl_term (t : term) : term =
   match t with
-  | TVar _ ->
-      t
-  | TSymbol _ ->
-      t
-  | TUnit ->
-      t
-  | TBool _ ->
-      t
-  | TInt _ ->
-      t
+  | TVar _ -> t
+  | TSymbol _ -> t
+  | TUnit -> t
+  | TBool _ -> t
+  | TInt _ -> t
   | TPair (t1, t2) ->
       let t1 = simpl_term t1 in
       let t2 = simpl_term t2 in
@@ -28,15 +23,12 @@ let rec simpl_term (t : term) : term =
   | TFun b ->
       let b = simpl_staged_spec_binder b in
       TFun b
-  | TMetavar _ ->
-      assert false
+  | TMetavar _ -> assert false
 
 and simpl_state (st : state) : state =
   match st with
-  | StState ->
-      st
-  | StMetavar _ ->
-      assert false
+  | StState -> st
+  | StMetavar _ -> assert false
 
 and simpl_staged_spec (s : staged_spec) : staged_spec =
   (* Format.printf "[simpl_staged_spec] s := %s\n" (Pretty.string_of_staged_spec s); *)
@@ -71,13 +63,11 @@ and simpl_staged_spec (s : staged_spec) : staged_spec =
   | Shift b ->
       let b = simpl_staged_spec_binder b in
       Shift b
-  | Reset s ->
-      simpl_staged_spec_cont ~delimited:true s identity_cont
+  | Reset s -> simpl_staged_spec_cont ~delimited:true s identity_cont
   | Dollar (s, k) ->
       let k = simpl_staged_spec_binder k in
       simpl_staged_spec_cont ~delimited:true s k
-  | SMetavar _ ->
-      assert false
+  | SMetavar _ -> assert false
 
 and simpl_staged_spec_binder (b : staged_spec_binder) : staged_spec_binder =
   match b with
@@ -89,10 +79,10 @@ and simpl_staged_spec_binder (b : staged_spec_binder) : staged_spec_binder =
       let s = simpl_staged_spec s in
       let b = unbox (bind_var x (box_staged_spec s)) in
       Binder b
-  | SBMetavar _ ->
-      assert false
+  | SBMetavar _ -> assert false
 
-and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_spec_binder) : staged_spec =
+and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec)
+    (cont : staged_spec_binder) : staged_spec =
   (* Format.printf "[simpl_staged_spec_cont] s := %s | cont := %s\n"
     (Pretty.string_of_staged_spec s)
     (Pretty.string_of_staged_spec_binder cont); *)
@@ -138,10 +128,10 @@ and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_
       let k = simpl_staged_spec_binder k in
       let s = simpl_staged_spec_cont ~delimited:true s k in
       simpl_staged_spec_cont ~delimited s cont
-  | SMetavar _ ->
-      assert false
+  | SMetavar _ -> assert false
 
-and simpl_staged_spec_binder_cont ~(delimited : bool) (b : staged_spec_binder) (cont : staged_spec_binder) : staged_spec_binder =
+and simpl_staged_spec_binder_cont ~(delimited : bool) (b : staged_spec_binder)
+    (cont : staged_spec_binder) : staged_spec_binder =
   match b with
   | Ignore s ->
       let s = simpl_staged_spec_cont ~delimited s cont in
@@ -151,5 +141,4 @@ and simpl_staged_spec_binder_cont ~(delimited : bool) (b : staged_spec_binder) (
       let s = simpl_staged_spec_cont ~delimited s cont in
       let b = unbox (bind_var x (box_staged_spec s)) in
       Binder b
-  | SBMetavar _ ->
-      assert false
+  | SBMetavar _ -> assert false
