@@ -22,9 +22,9 @@ let rec string_of_term_in (ctxt : ctxt) = function
       "<tmetavar>"
 
 and string_of_state_in (_ctxt : ctxt) = function
-  | STState ->
+  | StState ->
       "<ststate>"
-  | STMetavar _ ->
+  | StMetavar _ ->
       "<stmetavar>"
 
 and string_of_staged_spec_in (ctxt : ctxt) = function
@@ -67,6 +67,9 @@ and string_of_staged_spec_in (ctxt : ctxt) = function
       "<smetavar>"
 
 and string_of_staged_spec_binder_in (ctxt : ctxt) = function
+  | Ignore s ->
+      let s_str = string_of_staged_spec_in ctxt s in
+      Format.sprintf "_. %s" s_str
   | Binder b ->
       let x, s, ctxt = unbind_in ctxt b in
       let x_str = name_of x in

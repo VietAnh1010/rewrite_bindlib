@@ -1,2 +1,11 @@
 (test
- (name test_rewrite_bindlib))
+ (name test_rewrite_bindlib)
+ (modules test_rewrite_bindlib)
+ (libraries rewrite_bindlib unit_test_rewrite_bindlib))
+
+(library
+ (name unit_test_rewrite_bindlib)
+ (modules test_simpl)
+ (libraries rewrite_bindlib)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))

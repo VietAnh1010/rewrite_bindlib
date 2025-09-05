@@ -13,8 +13,8 @@ type term =
   | TMetavar of meta
 
 and state =
-  | STState
-  | STMetavar of meta
+  | StState
+  | StMetavar of meta
 
 and staged_spec =
   | Return of term
@@ -31,6 +31,7 @@ and staged_spec =
   | SMetavar of meta
 
 and staged_spec_binder =
+  | Ignore of staged_spec
   | Binder of (term, staged_spec) binder
   | SBMetavar of meta
 
@@ -45,8 +46,8 @@ module Constructors = struct
   let mk_tfun = box_apply (fun b -> TFun b)
   let mk_tmetavar = box_apply (fun m -> TMetavar m)
 
-  let mk_ststate = box STState
-  let mk_stmetavar = box_apply (fun m -> STMetavar m)
+  let mk_ststate = box StState
+  let mk_stmetavar = box_apply (fun m -> StMetavar m)
 
   let mk_meta = box Meta
 
@@ -63,6 +64,7 @@ module Constructors = struct
   let mk_dollar = box_apply2 (fun s k -> Dollar (s, k))
   let mk_smetavar = box_apply (fun m -> SMetavar m)
 
+  let mk_ignore = box_apply (fun s -> Ignore s)
   let mk_binder = box_apply (fun b -> Binder b)
   let mk_sbmetavar = box_apply (fun m -> SBMetavar m)
 
@@ -79,8 +81,8 @@ module Constructors = struct
     | TMetavar m -> mk_tmetavar (box_meta m)
 
   and box_state = function
-    | STState -> mk_ststate
-    | STMetavar m -> mk_stmetavar (box_meta m)
+    | StState -> mk_ststate
+    | StMetavar m -> mk_stmetavar (box_meta m)
 
   and box_staged_spec = function
     | Return t -> mk_return (box_term t)
@@ -96,133 +98,9 @@ module Constructors = struct
     | SMetavar m -> mk_smetavar (box_meta m)
 
   and box_staged_spec_binder = function
+    | Ignore s -> mk_ignore (box_staged_spec s)
     | Binder b -> mk_binder (box_binder box_staged_spec b)
     | SBMetavar m -> mk_sbmetavar (box_meta m)
-end
-
-module Examples = struct
-  open Constructors
-
-  let ex1_box =
-    let f = new_tvar "f" in
-    let v = new_tvar "v" in
-    mk_bind
-      (mk_return mk_tunit)
-      (mk_binder
-        (bind_var f
-          (mk_bind
-            (mk_return mk_tunit)
-            (mk_binder (bind_var v (mk_apply (mk_tvar f) (mk_tvar v)))))))
-
-  let ex1 = unbox ex1_box
-
-  let ex2_box =
-    let x = new_tvar "x" in
-    let f = new_tvar "f" in
-    let v = new_tvar "v" in
-    mk_bind
-      (mk_return (mk_tfun (mk_binder (bind_var x (mk_return (mk_tvar x))))))
-      (mk_binder
-        (bind_var f
-          (mk_bind
-            (mk_return (mk_tint (box 1)))
-            (mk_binder (bind_var v (mk_apply (mk_tvar f) (mk_tvar v)))))))
-
-  let ex2 = unbox ex2_box
-
-  let ex3_box =
-    let x = new_tvar "x" in
-    let k = new_tvar "k" in
-    mk_reset
-      (mk_sequence
-        (mk_ensures (mk_ststate))
-        (mk_bind
-          (mk_shift (mk_binder (bind_var k (mk_return (mk_tvar k)))))
-          (mk_binder (bind_var x (mk_return (mk_tint (box 10)))))))
-
-  let ex3 = unbox ex3_box
-
-  let ex4_box =
-    let i = new_tvar "i" in
-    let x = new_tvar "x" in
-    let k = new_tvar "k" in
-    mk_reset
-      (mk_exists
-        (mk_binder
-          (bind_var i
-            (mk_bind
-              (mk_shift (mk_binder (bind_var k (mk_return (mk_tvar k)))))
-              (mk_binder (bind_var x (mk_return (mk_tvar i))))))))
-
-  let ex4 = unbox ex4_box
-
-  let ex5_box =
-    let f = new_tvar "f" in
-    let k = new_tvar "k" in
-    let x = new_tvar "x" in
-    let y = new_tvar "y" in
-    mk_bind
-      (mk_reset
-        (mk_bind
-          (mk_shift (mk_binder (bind_var k (mk_return (mk_tvar k)))))
-          (mk_binder
-            (bind_var x
-              (mk_bind
-                (mk_shift (mk_binder (bind_var k (mk_return (mk_tvar k)))))
-                (mk_binder
-                  (bind_var y
-                    (mk_return (mk_tpair (mk_tvar x) (mk_tvar y))))))))))
-      (mk_binder
-        (bind_var f
-          (mk_bind
-            (mk_apply (mk_tvar f) (mk_tint (box 10)))
-            (mk_binder
-              (bind_var f
-                (mk_apply (mk_tvar f) (mk_tint (box 3))))))))
-
-  let ex5 = unbox ex5_box
-
-  let ex6_box =
-    let k = new_tvar "k" in
-    let x = new_tvar "x" in
-    let y = new_tvar "y" in
-    let f = new_tvar "f" in
-    mk_reset
-      (mk_bind
-        (mk_shift (mk_binder (bind_var k (mk_apply (mk_tvar k) (mk_tint (box 10))))))
-        (mk_binder
-          (bind_var x
-            (mk_bind
-              (mk_shift (mk_binder (bind_var k (mk_return (mk_tvar k)))))
-              (mk_binder
-                (bind_var y
-                  (mk_sequence
-                    (mk_sequence
-                      (mk_ensures mk_ststate)
-                      (mk_apply (mk_tvar f) mk_tunit))
-                    (mk_return (mk_tpair (mk_tvar x) (mk_tbool (box true)))))))))))
-
-  let ex6 = unbox ex6_box
-
-  let ex7_box =
-    let k = new_tvar "k" in
-    mk_shift
-      (mk_binder
-        (bind_var k
-          (mk_sequence
-            (mk_return (mk_tbool (box true)))
-            (mk_apply (mk_tvar k) mk_tunit))))
-
-  let ex7 = unbox ex7_box
-
-  let ex8_box =
-    mk_sequence
-      (mk_sequence
-        (mk_ensures mk_ststate)
-        (mk_ensures mk_ststate))
-      (mk_return (mk_tint (box 10)))
-
-  let ex8 = unbox ex8_box
 end
 
 module Binders = struct
@@ -230,8 +108,18 @@ module Binders = struct
 
   let subst_binder (b : staged_spec_binder) (t : term) : staged_spec =
     match b with
+    | Ignore s -> s
     | Binder b -> subst b t
     | SBMetavar _ -> assert false
+
+  let prepend_binder ~(delimited : bool) (b : staged_spec_binder) (s : staged_spec) : staged_spec =
+    if delimited then
+      Dollar (s, b)
+    else
+      match b with
+      | Ignore s' -> Sequence (s, s')
+      | Binder _ -> Bind (s, b)
+      | SBMetavar _ -> assert false
 
   let ignored_var = new_tvar "_"
 

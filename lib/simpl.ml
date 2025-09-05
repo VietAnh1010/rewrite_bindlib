@@ -42,27 +42,22 @@ and simpl_staged_spec (s : staged_spec) : staged_spec =
       let st = simpl_state st in
       Ensures st
   | Sequence (s1, s2) ->
-      let s1 = simpl_staged_spec s1 in
-      let s2 = simpl_staged_spec s2 in
-      begin
-        match s1 with
-        | Return _ -> s2
-        | _ -> Sequence (s1, s2)
-      end
+      simpl_staged_spec_cont ~delimited:false s1 (simpl_staged_spec_binder (Ignore s2))
   | Bind (s, b) ->
-      let s = simpl_staged_spec s in
+      simpl_staged_spec_cont ~delimited:false s (simpl_staged_spec_binder b)
+      (* let s = simpl_staged_spec s in
       let b = simpl_staged_spec_binder b in
       begin
         match s with
         | Return t -> simpl_staged_spec (subst_binder b t)
         | _ -> Bind (s, b)
-      end
+      end *)
   | Apply (f, t) ->
       let f = simpl_term f in
       let t = simpl_term t in
       begin
         match f with
-        | TFun (Binder b) -> simpl_staged_spec (subst b t)
+        | TFun b -> simpl_staged_spec (subst_binder b t)
         | _ -> Apply (f, t)
       end
   | Disjunct (s1, s2) ->
@@ -76,14 +71,17 @@ and simpl_staged_spec (s : staged_spec) : staged_spec =
       let b = simpl_staged_spec_binder b in
       Shift b
   | Reset s ->
-      simpl_staged_spec_cont s identity_cont
+      simpl_staged_spec_cont ~delimited:true s identity_cont
   | Dollar (s, cont) ->
-      simpl_staged_spec_cont s cont
+      simpl_staged_spec_cont ~delimited:true s cont
   | SMetavar _ ->
       assert false
 
 and simpl_staged_spec_binder (b : staged_spec_binder) : staged_spec_binder =
   match b with
+  | Ignore s ->
+      let s = simpl_staged_spec s in
+      Ignore s
   | Binder b ->
       let x, s = unbind b in
       let b = unbox (bind_var x (box_staged_spec (simpl_staged_spec s))) in
@@ -91,7 +89,7 @@ and simpl_staged_spec_binder (b : staged_spec_binder) : staged_spec_binder =
   | SBMetavar _ ->
       assert false
 
-and simpl_staged_spec_cont (s : staged_spec) (cont : staged_spec_binder) : staged_spec =
+and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_spec_binder) : staged_spec =
   (* Format.printf "[simpl_staged_spec_cont] s := %s | cont := %s\n"
     (Pretty.string_of_staged_spec s)
     (Pretty.string_of_staged_spec_binder cont); *)
@@ -103,38 +101,45 @@ and simpl_staged_spec_cont (s : staged_spec) (cont : staged_spec_binder) : stage
       let cont = simpl_staged_spec (subst_binder cont TUnit) in
       Sequence (Ensures st, cont)
   | Sequence (s1, s2) ->
-      simpl_staged_spec_cont s1 (mk_ignored_binder (simpl_staged_spec_cont s2 cont))
+      simpl_staged_spec_cont ~delimited s1 (simpl_staged_spec_binder_cont ~delimited (Ignore s2) cont)
   | Bind (s, b) ->
-      simpl_staged_spec_cont s (simpl_staged_spec_binder_cont b cont)
+      simpl_staged_spec_cont ~delimited s (simpl_staged_spec_binder_cont ~delimited b cont)
   | Apply (f, t) ->
       let f = simpl_term f in
       let t = simpl_term t in
       begin
         match f with
-        | TFun (Binder b) -> simpl_staged_spec_cont (subst b t) cont
-        | _ -> Dollar (Apply (f, t), cont)
+        | TFun b -> simpl_staged_spec_cont ~delimited (subst_binder b t) cont
+        | _ -> prepend_binder ~delimited cont (Apply (f, t))
       end
   | Disjunct (s1, s2) ->
-      let s1 = simpl_staged_spec_cont s1 cont in
-      let s2 = simpl_staged_spec_cont s2 cont in
+      let s1 = simpl_staged_spec_cont ~delimited s1 cont in
+      let s2 = simpl_staged_spec_cont ~delimited s2 cont in
       Disjunct (s1, s2)
   | Exists b ->
-      let b = simpl_staged_spec_binder_cont b cont in
+      let b = simpl_staged_spec_binder_cont ~delimited b cont in
       Exists b
   | Shift b ->
-      simpl_staged_spec_cont (subst_binder b (TFun cont)) identity_cont
+      if delimited then
+        simpl_staged_spec_cont ~delimited (subst_binder b (TFun cont)) identity_cont
+      else
+        let b = simpl_staged_spec_binder b in
+        prepend_binder ~delimited cont (Shift b)
   | Reset s ->
-      simpl_staged_spec_cont (simpl_staged_spec_cont s identity_cont) cont
+      simpl_staged_spec_cont ~delimited (simpl_staged_spec_cont ~delimited:true s identity_cont) cont
   | Dollar (s, k) ->
-      simpl_staged_spec_cont (simpl_staged_spec_cont s k) cont
+      simpl_staged_spec_cont ~delimited (simpl_staged_spec_cont ~delimited:true s k) cont
   | SMetavar _ ->
       assert false
 
-and simpl_staged_spec_binder_cont (b : staged_spec_binder) (cont : staged_spec_binder) : staged_spec_binder =
+and simpl_staged_spec_binder_cont ~(delimited : bool) (b : staged_spec_binder) (cont : staged_spec_binder) : staged_spec_binder =
   match b with
+  | Ignore s ->
+      let s = simpl_staged_spec_cont ~delimited s cont in
+      Ignore s
   | Binder b ->
       let x, s = unbind b in
-      let b = unbox (bind_var x (box_staged_spec (simpl_staged_spec_cont s cont))) in
+      let b = unbox (bind_var x (box_staged_spec (simpl_staged_spec_cont ~delimited s cont))) in
       Binder b
-  | _ ->
+  | SBMetavar _ ->
       assert false
