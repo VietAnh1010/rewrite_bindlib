@@ -47,20 +47,15 @@ and simpl_staged_spec (s : staged_spec) : staged_spec =
       simpl_staged_spec_cont ~delimited:false s1 (simpl_staged_spec_binder (Ignore s2))
   | Bind (s, b) ->
       simpl_staged_spec_cont ~delimited:false s (simpl_staged_spec_binder b)
-      (* let s = simpl_staged_spec s in
-      let b = simpl_staged_spec_binder b in
-      begin
-        match s with
-        | Return t -> simpl_staged_spec (subst_binder b t)
-        | _ -> Bind (s, b)
-      end *)
   | Apply (f, t) ->
-      let f = simpl_term f in
       let t = simpl_term t in
       begin
         match f with
-        | TFun b -> simpl_staged_spec (subst_binder b t)
-        | _ -> Apply (f, t)
+        | TFun b ->
+            simpl_staged_spec (subst_binder b t)
+        | _ ->
+            let f = simpl_term f in
+            Apply (f, t)
       end
   | Disjunct (s1, s2) ->
       let s1 = simpl_staged_spec s1 in
@@ -107,12 +102,14 @@ and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec) (cont : staged_
   | Bind (s, b) ->
       simpl_staged_spec_cont ~delimited s (simpl_staged_spec_binder_cont ~delimited b cont)
   | Apply (f, t) ->
-      let f = simpl_term f in
       let t = simpl_term t in
       begin
         match f with
-        | TFun b -> simpl_staged_spec_cont ~delimited (subst_binder b t) cont
-        | _ -> prepend_binder ~delimited cont (Apply (f, t))
+        | TFun b ->
+            simpl_staged_spec_cont ~delimited (subst_binder b t) cont
+        | _ ->
+            let f = simpl_term f in
+            prepend_binder ~delimited cont (Apply (f, t))
       end
   | Disjunct (s1, s2) ->
       let s1 = simpl_staged_spec_cont ~delimited s1 cont in
