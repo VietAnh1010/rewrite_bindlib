@@ -1,7 +1,7 @@
 open Bindlib
 
-type meta =
-  { m_name : string }
+type metavar =
+  { mv_name : string }
 
 type symbol =
   { s_name : string }
@@ -14,11 +14,11 @@ type term =
   | TInt of int
   | TPair of term * term
   | TFun of staged_spec_binder
-  | TMetavar of meta
+  | TMetavar of metavar
 
 and state =
   | StState
-  | StMetavar of meta
+  | StMetavar of metavar
 
 and staged_spec =
   | Return of term
@@ -31,12 +31,12 @@ and staged_spec =
   | Shift of staged_spec_binder
   | Reset of staged_spec
   | Dollar of staged_spec * staged_spec_binder
-  | SMetavar of meta
+  | SMetavar of metavar
 
 and staged_spec_binder =
   | Ignore of staged_spec
   | Binder of (term, staged_spec) binder
-  | SBMetavar of meta
+  | SBMetavar of metavar
 
 type sort =
   | Term
@@ -54,10 +54,10 @@ module Constructors = struct
   let mk_tint i = box (TInt i)
   let mk_tpair = box_apply2 (fun t1 t2 -> TPair (t1, t2))
   let mk_tfun = box_apply (fun b -> TFun b)
-  let mk_tmetavar m = box (TMetavar m)
+  let mk_tmetavar mv = box (TMetavar mv)
 
   let mk_ststate = box StState
-  let mk_stmetavar m = box (StMetavar m)
+  let mk_stmetavar mv = box (StMetavar mv)
 
   let mk_return = box_apply (fun t -> Return t)
   let mk_ensures = box_apply (fun st -> Ensures st)
@@ -69,11 +69,11 @@ module Constructors = struct
   let mk_shift = box_apply (fun b -> Shift b)
   let mk_reset = box_apply (fun s -> Reset s)
   let mk_dollar = box_apply2 (fun s k -> Dollar (s, k))
-  let mk_smetavar m = box (SMetavar m)
+  let mk_smetavar mv = box (SMetavar mv)
 
   let mk_ignore = box_apply (fun s -> Ignore s)
   let mk_binder = box_apply (fun b -> Binder b)
-  let mk_sbmetavar m = box (SBMetavar m)
+  let mk_sbmetavar mv = box (SBMetavar mv)
 
   let rec box_term = function
     | TVar x -> mk_tvar x
@@ -83,11 +83,11 @@ module Constructors = struct
     | TInt i -> mk_tint i
     | TPair (t1, t2) -> mk_tpair (box_term t1) (box_term t2)
     | TFun b -> mk_tfun (box_staged_spec_binder b)
-    | TMetavar m -> mk_tmetavar m
+    | TMetavar mv -> mk_tmetavar mv
 
   and box_state = function
     | StState -> mk_ststate
-    | StMetavar m -> mk_stmetavar m
+    | StMetavar mv -> mk_stmetavar mv
 
   and box_staged_spec = function
     | Return t -> mk_return (box_term t)
@@ -100,12 +100,12 @@ module Constructors = struct
     | Shift b -> mk_shift (box_staged_spec_binder b)
     | Reset s -> mk_reset (box_staged_spec s)
     | Dollar (s, k) -> mk_dollar (box_staged_spec s) (box_staged_spec_binder k)
-    | SMetavar m -> mk_smetavar m
+    | SMetavar mv -> mk_smetavar mv
 
   and box_staged_spec_binder = function
     | Ignore s -> mk_ignore (box_staged_spec s)
     | Binder b -> mk_binder (box_binder box_staged_spec b)
-    | SBMetavar m -> mk_sbmetavar m
+    | SBMetavar mv -> mk_sbmetavar mv
 end
 
 module StagedSpecBinder = struct
@@ -115,7 +115,7 @@ module StagedSpecBinder = struct
     | Binder b -> subst b t
     | SBMetavar _ -> assert false
 
-  let prepend ~(delimited : bool) (b : staged_spec_binder) (s : staged_spec) : staged_spec =
+  let compose ~(delimited : bool) (b : staged_spec_binder) (s : staged_spec) : staged_spec =
     if delimited then
       Dollar (s, b)
     else
@@ -125,11 +125,11 @@ module StagedSpecBinder = struct
       | SBMetavar _ -> assert false
 end
 
-module Meta = struct
-  type t = meta
-  let equal (m1 : t) (m2 : t) = String.equal m1.m_name m2.m_name
-  let compare (m1 : t) (m2 : t) = String.compare m1.m_name m2.m_name
-  let hash (m : t) = String.hash m.m_name
+module Metavar = struct
+  type t = metavar
+  let equal (mv1 : t) (mv2 : t) = String.equal mv1.mv_name mv2.mv_name
+  let compare (mv1 : t) (mv2 : t) = String.compare mv1.mv_name mv2.mv_name
+  let hash (mv : t) = String.hash mv.mv_name
 end
 
 module Symbol = struct

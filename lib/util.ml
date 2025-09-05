@@ -14,10 +14,10 @@ module MakeMSH (T : MakeMSHType) = struct
   module H = Hashtbl.Make (T)
 end
 
-module MetaMSH = MakeMSH (Meta)
-module MetaMap = MetaMSH.M
-module MetaSet = MetaMSH.S
-module MetaHashtbl = MetaMSH.H
+module MetavarMSH = MakeMSH (Metavar)
+module MetavarMap = MetavarMSH.M
+module MetavarSet = MetavarMSH.S
+module MetavarHashtbl = MetavarMSH.H
 
 module SymbolMSH = MakeMSH (Symbol)
 module SymbolMap = SymbolMSH.M

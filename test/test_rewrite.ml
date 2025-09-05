@@ -6,7 +6,7 @@ open Rewrite
 open Constructors
 
 let ex1_lhs_box =
-  mk_sequence (mk_smetavar {m_name = "S"}) (mk_return (mk_tmetavar {m_name = "T"}))
+  mk_sequence (mk_smetavar {mv_name = "S"}) (mk_return (mk_tmetavar {mv_name = "T"}))
 
 let ex1_rhs_box =
   mk_sequence (mk_apply (mk_tsymbol {s_name = "f"}) (mk_tint 10)) (mk_return (mk_tint 69))
