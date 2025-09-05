@@ -274,12 +274,18 @@ let rewrite_rooted_staged_spec_binder =
 
 let rewrite_rooted (rule : rule) (target : uobj) =
   match rule, target with
-  | RTerm rule, UTerm target -> UTerm (rewrite_rooted_term rule target)
-  | RState rule, UState target -> UState (rewrite_rooted_state rule target)
+  | RTerm rule, UTerm target ->
+      let result = rewrite_rooted_term rule target in
+      UTerm result
+  | RState rule, UState target ->
+      let result = rewrite_rooted_state rule target in
+      UState result
   | RStagedSpec rule, UStagedSpec target ->
-      UStagedSpec (rewrite_rooted_staged_spec rule target)
+      let result = rewrite_rooted_staged_spec rule target in
+      UStagedSpec result
   | RStagedSpecBinder rule, UStagedSpecBinder target ->
-      UStagedSpecBinder (rewrite_rooted_staged_spec_binder rule target)
+      let result = rewrite_rooted_staged_spec_binder rule target in
+      UStagedSpecBinder result
   | _, _ ->
       sort_mismatch
         (Format.sprintf "cannot rewrite object of sort %s with rule of sort %s"

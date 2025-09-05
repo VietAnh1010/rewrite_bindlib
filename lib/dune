@@ -1,4 +1,4 @@
 (library
  (name rewrite_bindlib)
- (modules syntax pretty simpl examples rewrite util)
+ (modules syntax pretty simpl examples rewrite util visitor)
  (libraries bindlib))
