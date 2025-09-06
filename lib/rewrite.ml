@@ -4,7 +4,6 @@ open Pretty
 open Sort
 open Util
 open Constructors
-open Visitor
 
 type uobj =
   | UTerm of term
@@ -45,21 +44,18 @@ module Subst = struct
   type t = uobj MetavarMap.t
 
   let empty = MetavarMap.empty
-
   let add = MetavarMap.add
   let adds f mv t = add mv (f t)
   let add_term = adds (fun t -> UTerm t)
   let add_state = adds (fun st -> UState st)
   let add_staged_spec = adds (fun s -> UStagedSpec s)
   let add_staged_spec_binder = adds (fun b -> UStagedSpecBinder b)
-
   let find_opt = MetavarMap.find_opt
   let find_opts f mv sigma = Option.map f (find_opt mv sigma)
   let find_term_opt = find_opts term_of_uobj
   let find_state_opt = find_opts state_of_uobj
   let find_staged_spec_opt = find_opts staged_spec_of_uobj
   let find_staged_spec_binder_opt = find_opts staged_spec_binder_of_uobj
-
   let to_string _sigma = Format.sprintf "%s" "[]"
 end
 
@@ -262,56 +258,271 @@ exception Rewrite_failure of exn
 
 let rewrite_failure exn = raise (Rewrite_failure exn)
 
-let rewrite_with unify subst rule_desc target =
-  try
-    let sigma = unify rule_desc.lhs target in
-    match rule_desc.rhs with
-    | Static rhs -> subst sigma rhs
-    | Dynamic rhs -> rhs sigma
-  with exn -> rewrite_failure exn
+module RewriteExact = struct
+  let rewrite_with unify subst rule_desc target =
+    try
+      let sigma = unify rule_desc.lhs target in
+      match rule_desc.rhs with
+      | Static rhs -> subst sigma rhs
+      | Dynamic rhs -> rhs sigma
+    with exn -> rewrite_failure exn
 
-let rewrite_term = rewrite_with unify_term subst_term
-let rewrite_state = rewrite_with unify_state subst_state
-let rewrite_staged_spec = rewrite_with unify_staged_spec subst_staged_spec
+  let rewrite_term = rewrite_with unify_term subst_term
+  let rewrite_state = rewrite_with unify_state subst_state
+  let rewrite_staged_spec = rewrite_with unify_staged_spec subst_staged_spec
 
-let rewrite_staged_spec_binder =
-  rewrite_with unify_staged_spec_binder subst_staged_spec_binder
+  let rewrite_staged_spec_binder =
+    rewrite_with unify_staged_spec_binder subst_staged_spec_binder
+end
 
-let rewrite_term_visitor rule_desc =
-  object
-    inherit [_] abstract_map_visitor as super
-    method! visit_term () t =
-      try rewrite_term rule_desc t
-      with Rewrite_failure _ -> super#visit_term () t
-  end
+type 'a exact_rewriter = 'a rule_desc -> 'a -> 'a
 
-let rewrite_state_visitor rule_desc =
-  object
-    inherit [_] abstract_map_visitor as super
-    method! visit_state () st =
-      try rewrite_state rule_desc st
-      with Rewrite_failure _ -> super#visit_state () st
-  end
+type ('a, 'ctxt) rewriter_method = 'ctxt rewriter -> 'ctxt -> 'a -> 'a * 'ctxt
 
-let rewrite_staged_spec_visitor rule_desc =
-  object
-    inherit [_] abstract_map_visitor as super
-    method! visit_staged_spec () s =
-      try rewrite_staged_spec rule_desc s
-      with Rewrite_failure _ -> super#visit_staged_spec () s
-  end
+and 'ctxt rewriter = {
+  rw_term : (term, 'ctxt) rewriter_method;
+  rw_state : (state, 'ctxt) rewriter_method;
+  rw_staged_spec : (staged_spec, 'ctxt) rewriter_method;
+  rw_staged_spec_binder : (staged_spec_binder, 'ctxt) rewriter_method;
+}
 
-let rewrite_staged_spec_binder_visitor rule_desc =
-  object
-    inherit [_] abstract_map_visitor as super
-    method! visit_staged_spec_binder () b =
-      try rewrite_staged_spec_binder rule_desc b
-      with Rewrite_failure _ -> super#visit_staged_spec_binder () b
-  end
+let default_rewriter =
+  let rec rw_term _ _ _ = assert false
+  and rw_state _ _ _ = assert false
+  and rw_staged_spec obj ctxt target =
+    match target with
+    | Return t ->
+        let t, ctxt = obj.rw_term obj ctxt t in
+        Return t, ctxt
+    | Ensures st ->
+        let st, ctxt = obj.rw_state obj ctxt st in
+        Ensures st, ctxt
+    | _ -> rw_staged_spec obj ctxt target
+  and rw_staged_spec_binder _ _ _ = assert false in
+  {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
 
-let rewrite_visitor rule =
-  match rule with
-  | RTerm rule_desc -> rewrite_term_visitor rule_desc
-  | RState rule_desc -> rewrite_state_visitor rule_desc
-  | RStagedSpec rule_desc -> rewrite_staged_spec_visitor rule_desc
-  | RStagedSpecBinder rule_desc -> rewrite_staged_spec_binder_visitor rule_desc
+module type CoreRewrite = sig
+  type ctxt
+
+  val rw_with :
+    'a exact_rewriter ->
+    ('a, ctxt) rewriter_method ->
+    'a rule_desc ->
+    ('a, ctxt) rewriter_method
+
+  val abstract_rewriter : ctxt rewriter
+end
+
+module MakeRewrite (R : CoreRewrite) = struct
+  open RewriteExact
+  include R
+
+  let rw_term = rw_with rewrite_term default_rewriter.rw_term
+  let rw_state = rw_with rewrite_state default_rewriter.rw_state
+
+  let rw_staged_spec =
+    rw_with rewrite_staged_spec default_rewriter.rw_staged_spec
+
+  let rw_staged_spec_binder =
+    rw_with rewrite_staged_spec_binder default_rewriter.rw_staged_spec_binder
+
+  let rewrite_term rule_desc =
+    {abstract_rewriter with rw_term = rw_term rule_desc}
+
+  let rewrite_state rule_desc =
+    {abstract_rewriter with rw_state = rw_state rule_desc}
+
+  let rewrite_staged_spec rule_desc =
+    {abstract_rewriter with rw_staged_spec = rw_staged_spec rule_desc}
+
+  let rewrite_staged_spec_binder rule_desc =
+    {
+      abstract_rewriter with
+      rw_staged_spec_binder = rw_staged_spec_binder rule_desc;
+    }
+
+  let rewriter_of_rule = function
+    | RTerm rule_desc -> rewrite_term rule_desc
+    | RState rule_desc -> rewrite_state rule_desc
+    | RStagedSpec rule_desc -> rewrite_staged_spec rule_desc
+    | RStagedSpecBinder rule_desc -> rewrite_staged_spec_binder rule_desc
+end
+
+module CoreRewriteAll = struct
+  type ctxt = unit
+
+  let rw_with rewrite default rule_desc obj () target =
+    try rewrite rule_desc target, ()
+    with Rewrite_failure _ -> default obj () target
+
+  let abstract_rewriter = default_rewriter
+end
+
+module RewiteAll = MakeRewrite (CoreRewriteAll)
+
+module CoreRewriteFirst = struct
+  type ctxt = bool
+
+  let rw_wrap default obj applied target =
+    if applied then target, applied else default obj applied target
+
+  let rw_with rewrite default rule_desc obj applied target =
+    try rewrite rule_desc target, true
+    with Rewrite_failure _ -> default obj applied target
+
+  let rw_with rewrite default rule_desc =
+    rw_wrap (rw_with rewrite default rule_desc)
+
+  let rw_term = rw_wrap default_rewriter.rw_term
+  let rw_state = rw_wrap default_rewriter.rw_state
+  let rw_staged_spec = rw_wrap default_rewriter.rw_staged_spec
+  let rw_staged_spec_binder = rw_wrap default_rewriter.rw_staged_spec_binder
+
+  let abstract_rewriter =
+    {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
+end
+
+module RewriteFirst = MakeRewrite (CoreRewriteFirst)
+
+(*
+module RewriteAll = struct
+  open RewriteExact
+  open CoreRewriteAll
+
+  class term_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_term t =
+        rewrite_with super (super#visit_term) rewrite_term rule_desc t
+    end
+end
+
+module RewriteAll = struct
+  open RewriteExact
+
+  class ['self] abstract_visitor =
+    object
+      inherit ['self] Visitor.abstract_map_visitor
+    end
+
+  class term_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_term t =
+        try rewrite_term rule_desc t
+        with Rewrite_failure _ -> super#visit_term t
+    end
+
+  class state_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_state st =
+        try rewrite_state rule_desc st
+        with Rewrite_failure _ -> super#visit_state st
+    end
+
+  class staged_spec_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_staged_spec s =
+        try rewrite_staged_spec rule_desc s
+        with Rewrite_failure _ -> super#visit_staged_spec s
+    end
+
+  class staged_spec_binder_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_staged_spec_binder b =
+        try rewrite_staged_spec_binder rule_desc b
+        with Rewrite_failure _ -> super#visit_staged_spec_binder b
+    end
+
+  let visitor_of_rule = function
+    | RTerm rule_desc -> new term_visitor rule_desc
+    | RState rule_desc -> new state_visitor rule_desc
+    | RStagedSpec rule_desc -> new staged_spec_visitor rule_desc
+    | RStagedSpecBinder rule_desc ->
+        new staged_spec_binder_visitor rule_desc
+end *)
+
+(* module RewriteFirst = struct
+  open RewriteExact
+
+  class virtual ['self] abstract_visitor =
+    object (self : 'self)
+      inherit ['self] Visitor.abstract_map_visitor as super
+      val mutable applied = false
+      method reset = applied <- false
+      method private visit_term_aux = super#visit_term
+      method private visit_state_aux = super#visit_state
+      method private visit_staged_spec_aux = super#visit_staged_spec
+
+      method private visit_staged_spec_binder_aux =
+        super#visit_staged_spec_binder
+
+      method! visit_term t = if applied then t else self#visit_term_aux t
+      method! visit_state st = if applied then st else self#visit_state_aux st
+
+      method! visit_staged_spec s =
+        if applied then s else self#visit_staged_spec_aux s
+
+      method! visit_staged_spec_binder b =
+        if applied then b else self#visit_staged_spec_binder_aux b
+    end
+
+  class term_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_term t =
+        if applied then t
+        else
+          try rewrite_term rule_desc t
+          with Rewrite_failure _ -> super#visit_term_aux t
+    end
+
+  class state_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_state st =
+        if applied then st
+        else
+          try rewrite_state rule_desc st
+          with Rewrite_failure _ -> super#visit_state_aux st
+    end
+
+  class staged_spec_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_staged_spec s =
+        if applied then s
+        else
+          try rewrite_staged_spec rule_desc s
+          with Rewrite_failure _ -> super#visit_staged_spec_aux s
+    end
+
+  class staged_spec_binder_visitor rule_desc =
+    object
+      inherit [_] abstract_visitor as super
+
+      method! visit_staged_spec_binder b =
+        if applied then b
+        else
+          try rewrite_staged_spec_binder rule_desc b
+          with Rewrite_failure _ -> super#visit_staged_spec_binder_aux b
+    end
+
+  let visitor_of_rule = function
+    | RTerm rule_desc -> new term_visitor rule_desc
+    | RState rule_desc -> new state_visitor rule_desc
+    | RStagedSpec rule_desc -> new staged_spec_visitor rule_desc
+    | RStagedSpecBinder rule_desc ->
+        new staged_spec_binder_visitor rule_desc
+end *)
