@@ -6,52 +6,57 @@ open Util
 open Constructors
 
 type uobj =
-  | UTerm of term
-  | UState of state
-  | UStagedSpec of staged_spec
-  | UStagedSpecBinder of staged_spec_binder
+  | UOTerm of term
+  | UOState of state
+  | UOStagedSpec of staged_spec
+  | UOStagedSpecBinder of staged_spec_binder
 
 let sort_of_uobj = function
-  | UTerm _ -> Term
-  | UState _ -> State
-  | UStagedSpec _ -> StagedSpec
-  | UStagedSpecBinder _ -> StagedSpecBinder
+  | UOTerm _ -> Term
+  | UOState _ -> State
+  | UOStagedSpec _ -> StagedSpec
+  | UOStagedSpecBinder _ -> StagedSpecBinder
 
-let string_of_uobj_sort obj = string_of_sort (sort_of_uobj obj)
+let string_of_uobj_sort uobj = string_of_sort (sort_of_uobj uobj)
 
-let invalid_uobj_sort ~expected obj =
+let invalid_uobj_sort ~expected uobj =
   invalid_sort
     (Format.sprintf "expected sort %s, got %s" (string_of_sort expected)
-       (string_of_uobj_sort obj))
+       (string_of_uobj_sort uobj))
+
+let uobj_of_term t = UOTerm t
+let uobj_of_state st = UOState st
+let uobj_of_staged_spec s = UOStagedSpec s
+let uobj_of_staged_spec_binder b = UOStagedSpecBinder b
 
 let term_of_uobj = function
-  | UTerm t -> t
-  | obj -> invalid_uobj_sort ~expected:Term obj
+  | UOTerm t -> t
+  | uobj -> invalid_uobj_sort ~expected:Term uobj
 
 let state_of_uobj = function
-  | UState st -> st
-  | obj -> invalid_uobj_sort ~expected:State obj
+  | UOState st -> st
+  | uobj -> invalid_uobj_sort ~expected:State uobj
 
 let staged_spec_of_uobj = function
-  | UStagedSpec s -> s
-  | obj -> invalid_uobj_sort ~expected:StagedSpec obj
+  | UOStagedSpec s -> s
+  | uobj -> invalid_uobj_sort ~expected:StagedSpec uobj
 
 let staged_spec_binder_of_uobj = function
-  | UStagedSpecBinder b -> b
-  | obj -> invalid_uobj_sort ~expected:StagedSpecBinder obj
+  | UOStagedSpecBinder b -> b
+  | uobj -> invalid_uobj_sort ~expected:StagedSpecBinder uobj
 
 module Subst = struct
   type t = uobj MetavarMap.t
 
   let empty = MetavarMap.empty
   let add = MetavarMap.add
-  let adds f mv t = add mv (f t)
-  let add_term = adds (fun t -> UTerm t)
-  let add_state = adds (fun st -> UState st)
-  let add_staged_spec = adds (fun s -> UStagedSpec s)
-  let add_staged_spec_binder = adds (fun b -> UStagedSpecBinder b)
   let find_opt = MetavarMap.find_opt
+  let adds f mv t = add mv (f t)
   let find_opts f mv sigma = Option.map f (find_opt mv sigma)
+  let add_term = adds uobj_of_term
+  let add_state = adds uobj_of_state
+  let add_staged_spec = adds uobj_of_staged_spec
+  let add_staged_spec_binder = adds uobj_of_staged_spec_binder
   let find_term_opt = find_opts term_of_uobj
   let find_state_opt = find_opts state_of_uobj
   let find_staged_spec_opt = find_opts staged_spec_of_uobj
@@ -130,10 +135,10 @@ and unify_staged_spec_aux (sigma : Subst.t) (s1 : staged_spec)
 and unify_staged_spec_binder_aux (sigma : Subst.t) (b1 : staged_spec_binder)
     (b2 : staged_spec_binder) : Subst.t =
   match b1, b2 with
-  | Ignore s1, Ignore s2 -> unify_staged_spec_aux sigma s1 s2
   | Binder b1, Binder b2 ->
       let _, s1, s2 = unbind2 b1 b2 in
       unify_staged_spec_aux sigma s1 s2
+  | Ignore s1, Ignore s2 -> unify_staged_spec_aux sigma s1 s2
   | SBMetavar _, SBMetavar _ -> raise Unification_failure
   | SBMetavar mv, b | b, SBMetavar mv -> begin
       match Subst.find_staged_spec_binder_opt mv sigma with
@@ -223,306 +228,222 @@ and subst_staged_spec (sigma : Subst.t) (s : staged_spec) =
 
 and subst_staged_spec_binder (sigma : Subst.t) (b : staged_spec_binder) =
   match b with
-  | Ignore s ->
-      let s = subst_staged_spec sigma s in
-      Ignore s
   | Binder b ->
       let x, s = unbind b in
       let s = subst_staged_spec sigma s in
       let b = unbox (bind_var x (box_staged_spec s)) in
       Binder b
+  | Ignore s ->
+      let s = subst_staged_spec sigma s in
+      Ignore s
   | SBMetavar mv -> begin
       match Subst.find_staged_spec_binder_opt mv sigma with
       | None -> raise Substitution_failure
       | Some b -> b
     end
 
-type 'a rule_desc_rhs = Static of 'a | Dynamic of (Subst.t -> 'a)
-type 'a rule_desc = {lhs : 'a; rhs : 'a rule_desc_rhs}
+type ('ctxt, 'a) rule_rhs = Static of 'a | Dynamic of (Subst.t -> 'ctxt -> 'a)
+type ('ctxt, 'a) rule = {lhs : 'a; rhs : ('ctxt, 'a) rule_rhs}
 
-type rule =
-  | RTerm of term rule_desc
-  | RState of state rule_desc
-  | RStagedSpec of staged_spec rule_desc
-  | RStagedSpecBinder of staged_spec_binder rule_desc
+let string_of_rule_rhs to_string = function
+  | Static rhs -> to_string rhs
+  | Dynamic _ -> "<dynamic>"
 
-let sort_of_rule = function
-  | RTerm _ -> Term
-  | RState _ -> State
-  | RStagedSpec _ -> StagedSpec
-  | RStagedSpecBinder _ -> StagedSpecBinder
+let string_of_rule to_string {lhs; rhs} =
+  Format.sprintf "{lhs = %s; rhs = %s}" (to_string lhs)
+    (string_of_rule_rhs to_string rhs)
 
-let string_of_rule_sort rule = string_of_sort (sort_of_rule rule)
+type 'ctxt urule =
+  | URTerm of ('ctxt, term) rule
+  | URState of ('ctxt, state) rule
+  | URStagedSpec of ('ctxt, staged_spec) rule
+  | URStagedSpecBinder of ('ctxt, staged_spec_binder) rule
+
+let sort_of_urule = function
+  | URTerm _ -> Term
+  | URState _ -> State
+  | URStagedSpec _ -> StagedSpec
+  | URStagedSpecBinder _ -> StagedSpecBinder
+
+let string_of_urule_sort rule = string_of_sort (sort_of_urule rule)
 
 exception Rewrite_failure of exn
 
 let rewrite_failure exn = raise (Rewrite_failure exn)
 
 module RewriteExact = struct
-  let rewrite_with unify subst rule_desc target =
+  let rewrite_with unify subst {lhs; rhs} ctxt target =
     try
-      let sigma = unify rule_desc.lhs target in
-      match rule_desc.rhs with
+      let sigma = unify lhs target in
+      match rhs with
       | Static rhs -> subst sigma rhs
-      | Dynamic rhs -> rhs sigma
+      | Dynamic rhs -> rhs sigma ctxt
     with exn -> rewrite_failure exn
 
-  let rewrite_term = rewrite_with unify_term subst_term
-  let rewrite_state = rewrite_with unify_state subst_state
-  let rewrite_staged_spec = rewrite_with unify_staged_spec subst_staged_spec
+  let rewrite_term rule = rewrite_with unify_term subst_term rule
+  let rewrite_state rule = rewrite_with unify_state subst_state rule
 
-  let rewrite_staged_spec_binder =
-    rewrite_with unify_staged_spec_binder subst_staged_spec_binder
-end
+  let rewrite_staged_spec rule =
+    rewrite_with unify_staged_spec subst_staged_spec rule
 
-type 'a exact_rewriter = 'a rule_desc -> 'a -> 'a
-
-type ('a, 'ctxt) rewriter_method = 'ctxt rewriter -> 'ctxt -> 'a -> 'a * 'ctxt
-
-and 'ctxt rewriter = {
-  rw_term : (term, 'ctxt) rewriter_method;
-  rw_state : (state, 'ctxt) rewriter_method;
-  rw_staged_spec : (staged_spec, 'ctxt) rewriter_method;
-  rw_staged_spec_binder : (staged_spec_binder, 'ctxt) rewriter_method;
-}
-
-let default_rewriter =
-  let rec rw_term _ _ _ = assert false
-  and rw_state _ _ _ = assert false
-  and rw_staged_spec obj ctxt target =
-    match target with
-    | Return t ->
-        let t, ctxt = obj.rw_term obj ctxt t in
-        Return t, ctxt
-    | Ensures st ->
-        let st, ctxt = obj.rw_state obj ctxt st in
-        Ensures st, ctxt
-    | _ -> rw_staged_spec obj ctxt target
-  and rw_staged_spec_binder _ _ _ = assert false in
-  {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
-
-module type CoreRewrite = sig
-  type ctxt
-
-  val rw_with :
-    'a exact_rewriter ->
-    ('a, ctxt) rewriter_method ->
-    'a rule_desc ->
-    ('a, ctxt) rewriter_method
-
-  val abstract_rewriter : ctxt rewriter
-end
-
-module MakeRewrite (R : CoreRewrite) = struct
-  open RewriteExact
-  include R
-
-  let rw_term = rw_with rewrite_term default_rewriter.rw_term
-  let rw_state = rw_with rewrite_state default_rewriter.rw_state
-
-  let rw_staged_spec =
-    rw_with rewrite_staged_spec default_rewriter.rw_staged_spec
-
-  let rw_staged_spec_binder =
-    rw_with rewrite_staged_spec_binder default_rewriter.rw_staged_spec_binder
-
-  let rewrite_term rule_desc =
-    {abstract_rewriter with rw_term = rw_term rule_desc}
-
-  let rewrite_state rule_desc =
-    {abstract_rewriter with rw_state = rw_state rule_desc}
-
-  let rewrite_staged_spec rule_desc =
-    {abstract_rewriter with rw_staged_spec = rw_staged_spec rule_desc}
-
-  let rewrite_staged_spec_binder rule_desc =
-    {
-      abstract_rewriter with
-      rw_staged_spec_binder = rw_staged_spec_binder rule_desc;
-    }
-
-  let rewriter_of_rule = function
-    | RTerm rule_desc -> rewrite_term rule_desc
-    | RState rule_desc -> rewrite_state rule_desc
-    | RStagedSpec rule_desc -> rewrite_staged_spec rule_desc
-    | RStagedSpecBinder rule_desc -> rewrite_staged_spec_binder rule_desc
-end
-
-module CoreRewriteAll = struct
-  type ctxt = unit
-
-  let rw_with rewrite default rule_desc obj () target =
-    try rewrite rule_desc target, ()
-    with Rewrite_failure _ -> default obj () target
-
-  let abstract_rewriter = default_rewriter
-end
-
-module RewiteAll = MakeRewrite (CoreRewriteAll)
-
-module CoreRewriteFirst = struct
-  type ctxt = bool
-
-  let rw_wrap default obj applied target =
-    if applied then target, applied else default obj applied target
-
-  let rw_with rewrite default rule_desc obj applied target =
-    try rewrite rule_desc target, true
-    with Rewrite_failure _ -> default obj applied target
-
-  let rw_with rewrite default rule_desc =
-    rw_wrap (rw_with rewrite default rule_desc)
-
-  let rw_term = rw_wrap default_rewriter.rw_term
-  let rw_state = rw_wrap default_rewriter.rw_state
-  let rw_staged_spec = rw_wrap default_rewriter.rw_staged_spec
-  let rw_staged_spec_binder = rw_wrap default_rewriter.rw_staged_spec_binder
-
-  let abstract_rewriter =
-    {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
-end
-
-module RewriteFirst = MakeRewrite (CoreRewriteFirst)
-
-(*
-module RewriteAll = struct
-  open RewriteExact
-  open CoreRewriteAll
-
-  class term_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
-
-      method! visit_term t =
-        rewrite_with super (super#visit_term) rewrite_term rule_desc t
-    end
+  let rewrite_staged_spec_binder rule =
+    rewrite_with unify_staged_spec_binder subst_staged_spec_binder rule
 end
 
 module RewriteAll = struct
   open RewriteExact
 
-  class ['self] abstract_visitor =
-    object
-      inherit ['self] Visitor.abstract_map_visitor
-    end
+  type ('ctxt, 'a) rewriter = {
+    rw_term : ('ctxt, 'a, term) rewriter_method;
+    rw_state : ('ctxt, 'a, state) rewriter_method;
+    rw_staged_spec : ('ctxt, 'a, staged_spec) rewriter_method;
+    rw_staged_spec_binder : ('ctxt, 'a, staged_spec_binder) rewriter_method;
+  }
 
-  class term_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+  and ('ctxt, 'a, 'b) rewriter_method =
+    ('ctxt, 'a) rewriter -> ('ctxt, 'a) rule -> 'ctxt -> 'b -> 'b
 
-      method! visit_term t =
-        try rewrite_term rule_desc t
-        with Rewrite_failure _ -> super#visit_term t
-    end
+  let rw_with rewrite rw self rule ctxt target =
+    try rewrite rule ctxt target
+    with Rewrite_failure _ -> rw self rule ctxt target
 
-  class state_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+  module AbstractRewriter = struct
+    let rw_term self rule ctxt t =
+      match t with
+      | TVar _ -> t
+      | TSymbol _ -> t
+      | TUnit -> t
+      | TBool _ -> t
+      | TInt _ -> t
+      | TPair (t1, t2) ->
+          let t1 = self.rw_term self rule ctxt t1 in
+          let t2 = self.rw_term self rule ctxt t2 in
+          TPair (t1, t2)
+      | TFun b ->
+          let b = self.rw_staged_spec_binder self rule ctxt b in
+          TFun b
+      | TMetavar _ -> t
 
-      method! visit_state st =
-        try rewrite_state rule_desc st
-        with Rewrite_failure _ -> super#visit_state st
-    end
+    let rw_state _ _ _ st =
+      match st with
+      | StState -> st
+      | StMetavar _ -> st
 
-  class staged_spec_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+    let rw_staged_spec self rule ctxt s =
+      match s with
+      | Return t ->
+          let t = self.rw_term self rule ctxt t in
+          Return t
+      | Ensures st ->
+          let st = self.rw_state self rule ctxt st in
+          Ensures st
+      | Sequence (s1, s2) ->
+          let s1 = self.rw_staged_spec self rule ctxt s1 in
+          let s2 = self.rw_staged_spec self rule ctxt s2 in
+          Sequence (s1, s2)
+      | Bind (s, b) ->
+          let s = self.rw_staged_spec self rule ctxt s in
+          let b = self.rw_staged_spec_binder self rule ctxt b in
+          Bind (s, b)
+      | Apply (f, t) ->
+          let f = self.rw_term self rule ctxt f in
+          let t = self.rw_term self rule ctxt t in
+          Apply (f, t)
+      | Disjunct (s1, s2) ->
+          let s1 = self.rw_staged_spec self rule ctxt s1 in
+          let s2 = self.rw_staged_spec self rule ctxt s2 in
+          Disjunct (s1, s2)
+      | Exists b ->
+          let b = self.rw_staged_spec_binder self rule ctxt b in
+          Exists b
+      | Shift b ->
+          let b = self.rw_staged_spec_binder self rule ctxt b in
+          Shift b
+      | Reset s ->
+          let s = self.rw_staged_spec self rule ctxt s in
+          Reset s
+      | Dollar (s, k) ->
+          let s = self.rw_staged_spec self rule ctxt s in
+          let k = self.rw_staged_spec_binder self rule ctxt k in
+          Dollar (s, k)
+      | SMetavar _ -> s
 
-      method! visit_staged_spec s =
-        try rewrite_staged_spec rule_desc s
-        with Rewrite_failure _ -> super#visit_staged_spec s
-    end
+    let rw_staged_spec_binder self rule ctxt b =
+      match b with
+      | Binder b ->
+          let x, s = unbind b in
+          let s = self.rw_staged_spec self rule ctxt s in
+          let b = unbox (bind_var x (box_staged_spec s)) in
+          Binder b
+      | Ignore s ->
+          let s = self.rw_staged_spec self rule ctxt s in
+          Ignore s
+      | SBMetavar _ -> b
 
-  class staged_spec_binder_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+    let rewriter = {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
+  end
 
-      method! visit_staged_spec_binder b =
-        try rewrite_staged_spec_binder rule_desc b
-        with Rewrite_failure _ -> super#visit_staged_spec_binder b
-    end
+  module type ConcreteRewriter = sig
+    type t
 
-  let visitor_of_rule = function
-    | RTerm rule_desc -> new term_visitor rule_desc
-    | RState rule_desc -> new state_visitor rule_desc
-    | RStagedSpec rule_desc -> new staged_spec_visitor rule_desc
-    | RStagedSpecBinder rule_desc ->
-        new staged_spec_binder_visitor rule_desc
-end *)
+    val rw_term : ('ctxt, t, term) rewriter_method
+    val rw_state : ('ctxt, t, state) rewriter_method
+    val rw_staged_spec : ('ctxt, t, staged_spec) rewriter_method
+    val rw_staged_spec_binder : ('ctxt, t, staged_spec_binder) rewriter_method
+    val rewriter : ('ctxt, t) rewriter
+  end
 
-(* module RewriteFirst = struct
-  open RewriteExact
+  module TermRewriter = struct
+    include AbstractRewriter
 
-  class virtual ['self] abstract_visitor =
-    object (self : 'self)
-      inherit ['self] Visitor.abstract_map_visitor as super
-      val mutable applied = false
-      method reset = applied <- false
-      method private visit_term_aux = super#visit_term
-      method private visit_state_aux = super#visit_state
-      method private visit_staged_spec_aux = super#visit_staged_spec
+    type t = term
 
-      method private visit_staged_spec_binder_aux =
-        super#visit_staged_spec_binder
+    let rw_term self = rw_with rewrite_term rw_term self
+    let rewriter = {rewriter with rw_term}
+  end
 
-      method! visit_term t = if applied then t else self#visit_term_aux t
-      method! visit_state st = if applied then st else self#visit_state_aux st
+  module StateRewriter = struct
+    include AbstractRewriter
 
-      method! visit_staged_spec s =
-        if applied then s else self#visit_staged_spec_aux s
+    type t = state
 
-      method! visit_staged_spec_binder b =
-        if applied then b else self#visit_staged_spec_binder_aux b
-    end
+    let rw_state self = rw_with rewrite_state rw_state self
+    let rewriter = {rewriter with rw_state}
+  end
 
-  class term_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+  module StagedSpecRewriter = struct
+    include AbstractRewriter
 
-      method! visit_term t =
-        if applied then t
-        else
-          try rewrite_term rule_desc t
-          with Rewrite_failure _ -> super#visit_term_aux t
-    end
+    type t = staged_spec
 
-  class state_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+    let rw_staged_spec self = rw_with rewrite_staged_spec rw_staged_spec self
+    let rewriter = {rewriter with rw_staged_spec}
+  end
 
-      method! visit_state st =
-        if applied then st
-        else
-          try rewrite_state rule_desc st
-          with Rewrite_failure _ -> super#visit_state_aux st
-    end
+  module StagedSpecBinderRewriter = struct
+    include AbstractRewriter
 
-  class staged_spec_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+    type t = staged_spec_binder
 
-      method! visit_staged_spec s =
-        if applied then s
-        else
-          try rewrite_staged_spec rule_desc s
-          with Rewrite_failure _ -> super#visit_staged_spec_aux s
-    end
+    let rw_staged_spec_binder self =
+      rw_with rewrite_staged_spec_binder rw_staged_spec_binder self
 
-  class staged_spec_binder_visitor rule_desc =
-    object
-      inherit [_] abstract_visitor as super
+    let rewriter = {rewriter with rw_staged_spec_binder}
+  end
 
-      method! visit_staged_spec_binder b =
-        if applied then b
-        else
-          try rewrite_staged_spec_binder rule_desc b
-          with Rewrite_failure _ -> super#visit_staged_spec_binder_aux b
-    end
+  module Make (T : ConcreteRewriter) = struct
+    type t = T.t
 
-  let visitor_of_rule = function
-    | RTerm rule_desc -> new term_visitor rule_desc
-    | RState rule_desc -> new state_visitor rule_desc
-    | RStagedSpec rule_desc -> new staged_spec_visitor rule_desc
-    | RStagedSpecBinder rule_desc ->
-        new staged_spec_binder_visitor rule_desc
-end *)
+    open T
+
+    let rewrite_term rule = rw_term rewriter rule
+    let rewrite_state rule = rw_state rewriter rule
+    let rewrite_staged_spec rule = rw_staged_spec rewriter rule
+    let rewrite_staged_spec_binder rule = rw_staged_spec_binder rewriter rule
+  end
+
+  module Term = Make (TermRewriter)
+  module State = Make (StateRewriter)
+  module StagedSpec = Make (StagedSpecRewriter)
+  module StagedSpecBinder = Make (StagedSpecBinderRewriter)
+end

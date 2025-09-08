@@ -71,14 +71,14 @@ and simpl_staged_spec (s : staged_spec) : staged_spec =
 
 and simpl_staged_spec_binder (b : staged_spec_binder) : staged_spec_binder =
   match b with
-  | Ignore s ->
-      let s = simpl_staged_spec s in
-      Ignore s
   | Binder b ->
       let x, s = unbind b in
       let s = simpl_staged_spec s in
       let b = unbox (bind_var x (box_staged_spec s)) in
       Binder b
+  | Ignore s ->
+      let s = simpl_staged_spec s in
+      Ignore s
   | SBMetavar _ -> assert false
 
 and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec)
@@ -133,12 +133,12 @@ and simpl_staged_spec_cont ~(delimited : bool) (s : staged_spec)
 and simpl_staged_spec_binder_cont ~(delimited : bool) (b : staged_spec_binder)
     (cont : staged_spec_binder) : staged_spec_binder =
   match b with
-  | Ignore s ->
-      let s = simpl_staged_spec_cont ~delimited s cont in
-      Ignore s
   | Binder b ->
       let x, s = unbind b in
       let s = simpl_staged_spec_cont ~delimited s cont in
       let b = unbox (bind_var x (box_staged_spec s)) in
       Binder b
+  | Ignore s ->
+      let s = simpl_staged_spec_cont ~delimited s cont in
+      Ignore s
   | SBMetavar _ -> assert false

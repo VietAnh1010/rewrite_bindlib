@@ -68,14 +68,14 @@ and string_of_staged_spec_in (ctxt : ctxt) = function
   | SMetavar mv -> string_of_metavar mv
 
 and string_of_staged_spec_binder_in (ctxt : ctxt) = function
-  | Ignore s ->
-      let s_str = string_of_staged_spec_in ctxt s in
-      Format.sprintf "_. %s" s_str
   | Binder b ->
       let x, s, ctxt = unbind_in ctxt b in
       let x_str = name_of x in
       let s_str = string_of_staged_spec_in ctxt s in
       Format.sprintf "%s. %s" x_str s_str
+  | Ignore s ->
+      let s_str = string_of_staged_spec_in ctxt s in
+      Format.sprintf "_. %s" s_str
   | SBMetavar mv -> string_of_metavar mv
 
 let string_of_term = string_of_term_in empty_ctxt

@@ -29,8 +29,8 @@ and staged_spec =
   | SMetavar of metavar
 
 and staged_spec_binder =
-  | Ignore of staged_spec
   | Binder of (term, staged_spec) binder
+  | Ignore of staged_spec
   | SBMetavar of metavar
 
 type sort = Term | State | StagedSpec | StagedSpecBinder
@@ -62,8 +62,8 @@ module Constructors = struct
   let mk_dollar = box_apply2 (fun s k -> Dollar (s, k))
   let mk_smetavar mv = box (SMetavar mv)
 
-  let mk_ignore = box_apply (fun s -> Ignore s)
   let mk_binder = box_apply (fun b -> Binder b)
+  let mk_ignore = box_apply (fun s -> Ignore s)
   let mk_sbmetavar mv = box (SBMetavar mv)
 
   let rec box_term = function
@@ -94,16 +94,16 @@ module Constructors = struct
     | SMetavar mv -> mk_smetavar mv
 
   and box_staged_spec_binder = function
-    | Ignore s -> mk_ignore (box_staged_spec s)
     | Binder b -> mk_binder (box_binder box_staged_spec b)
+    | Ignore s -> mk_ignore (box_staged_spec s)
     | SBMetavar mv -> mk_sbmetavar mv
 end
 
 module StagedSpecBinder = struct
   let subst (b : staged_spec_binder) (t : term) : staged_spec =
     match b with
-    | Ignore s -> s
     | Binder b -> subst b t
+    | Ignore s -> s
     | SBMetavar _ -> assert false
 
   let compose ~(delimited : bool) (b : staged_spec_binder) (s : staged_spec) :
@@ -111,8 +111,8 @@ module StagedSpecBinder = struct
     if delimited then Dollar (s, b)
     else
       match b with
-      | Ignore s' -> Sequence (s, s')
       | Binder _ -> Bind (s, b)
+      | Ignore s' -> Sequence (s, s')
       | SBMetavar _ -> assert false
 end
 

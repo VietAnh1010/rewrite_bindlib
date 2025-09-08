@@ -103,8 +103,8 @@ class virtual ['self] abstract_map_visitor =
 
     method visit_staged_spec_binder b =
       match b with
-      | Ignore s -> self#visit_Ignore s
       | Binder b -> self#visit_Binder b
+      | Ignore s -> self#visit_Ignore s
       | SBMetavar mv -> self#visit_SBMetavar mv
 
     method visit_Ignore s =
