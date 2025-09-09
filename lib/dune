@@ -1,4 +1,4 @@
 (library
  (name rewrite_bindlib)
- (modules syntax pretty simpl examples rewrite util visitor vars metavars)
+ (modules syntax pretty simpl examples rewrite util visitor vars metavars monad subst uobj)
  (libraries bindlib))

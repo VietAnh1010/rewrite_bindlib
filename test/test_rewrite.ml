@@ -6,6 +6,7 @@ open Rewrite
 open Constructors
 open Vars
 open Metavars
+open Subst
 
 let ex1_lhs_box = mk_sequence (mk_smetavar s') (mk_return (mk_tmetavar t'))
 
@@ -28,7 +29,7 @@ let%expect_test "unify_staged_spec" =
       %s
       |}
       (string_of_staged_spec s1) (string_of_staged_spec s2)
-      (Subst.to_string sigma)
+      (string_of_subst sigma)
   in
   let () =
     test_unify_staged_spec ex1_lhs ex1_rhs;
