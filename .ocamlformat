@@ -8,4 +8,5 @@ space-around-lists = false
 space-around-records = false
 space-around-variants = false
 module-item-spacing = preserve
+# module-item-spacing = compact
 margin = 80

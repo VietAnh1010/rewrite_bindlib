@@ -5,7 +5,7 @@
 
 (library
  (name unit_test_rewrite_bindlib)
- (modules test_simpl test_rewrite)
+ (modules test_simpl test_rewrite test_unify)
  (libraries rewrite_bindlib)
  (inline_tests)
  (preprocess (pps ppx_expect)))
