@@ -258,34 +258,31 @@ module RewriteFirst = struct
   open M.LetSyntax
   open RewriteExact
 
-  let rw_base visit self rule ctxt target =
+  let rw_wrap visit self rule ctxt target =
     let* applied = M.get in
     if applied then M.return target else visit self rule ctxt target
 
   module BaseRewriter : AbstractRewriter = struct
-    let rw_term self = rw_base visit_term self
-    let rw_state self = rw_base visit_state self
-    let rw_staged_spec self = rw_base visit_staged_spec self
-    let rw_staged_spec_binder self = rw_base visit_staged_spec_binder self
+    let rw_term self = rw_wrap visit_term self
+    let rw_state self = rw_wrap visit_state self
+    let rw_staged_spec self = rw_wrap visit_staged_spec self
+    let rw_staged_spec_binder self = rw_wrap visit_staged_spec_binder self
     let rewriter = {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
   end
 
   let rw_with rewrite visit self rule ctxt target =
-    let* applied = M.get in
-    if applied then M.return target
-    else
-      try
-        let result = rewrite rule ctxt target in
-        let+ () = M.put true in
-        result
-      with Rewrite_failure -> visit self rule ctxt target
+    try
+      let result = rewrite rule ctxt target in
+      let+ () = M.put true in
+      result
+    with Rewrite_failure -> visit self rule ctxt target
 
   module TermRewriter : ConcreteRewriter with type t = term = struct
     type t = term
 
     include BaseRewriter
 
-    let rw_term self = rw_with rewrite_term visit_term self
+    let rw_term self = rw_wrap (rw_with rewrite_term visit_term) self
     let rewriter = {rewriter with rw_term}
   end
 
@@ -294,7 +291,7 @@ module RewriteFirst = struct
 
     include BaseRewriter
 
-    let rw_state self = rw_with rewrite_state visit_state self
+    let rw_state self = rw_wrap (rw_with rewrite_state visit_state) self
     let rewriter = {rewriter with rw_state}
   end
 
@@ -304,7 +301,9 @@ module RewriteFirst = struct
 
     include BaseRewriter
 
-    let rw_staged_spec self = rw_with rewrite_staged_spec visit_staged_spec self
+    let rw_staged_spec self =
+      rw_wrap (rw_with rewrite_staged_spec visit_staged_spec) self
+
     let rewriter = {rewriter with rw_staged_spec}
   end
 
@@ -315,7 +314,7 @@ module RewriteFirst = struct
     include BaseRewriter
 
     let rw_staged_spec_binder self =
-      rw_with rewrite_staged_spec_binder visit_staged_spec_binder self
+      rw_wrap (rw_with rewrite_staged_spec_binder visit_staged_spec_binder) self
 
     let rewriter = {rewriter with rw_staged_spec_binder}
   end

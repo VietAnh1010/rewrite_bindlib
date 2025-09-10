@@ -44,6 +44,18 @@ let ex2_target_box =
 
 let ex2_target = unbox ex2_target_box
 
+let ex3_rule = ex2_rule
+let ex3_target_box =
+  mk_bind
+    (mk_reset (mk_return (mk_tint 10)))
+    (mk_binder
+       (bind_var x
+          (mk_sequence
+             (mk_sequence (mk_return (mk_tint 2)) (mk_return (mk_tint 3)))
+             (mk_return (mk_tint 4)))))
+
+let ex3_target = unbox ex3_target_box
+
 let%expect_test "RewriteAll.rewrite_staged_spec (static)" =
   let open RewriteAll in
   let open StagedSpec in
@@ -78,6 +90,16 @@ let%expect_test "RewriteAll.rewrite_staged_spec (static)" =
       { ((((return 1; return 2); return 3); return 4); return 5) }
       >>> rewrite_staged_spec >>>
       (return 1; (return 2; (return 3; (return 4; return 5))))
+      |}]
+  in
+  let () =
+    test_rewrite_staged_spec ex3_rule ex3_target;
+    [%expect
+      {|
+      { {lhs = ((?s; ?t); ?u); rhs = (?s; (?t; ?u))} }
+      { (reset (return 10); x. ((return 2; return 3); return 4)) }
+      >>> rewrite_staged_spec >>>
+      (reset (return 10); x. (return 2; (return 3; return 4)))
       |}]
   in
   ()
@@ -116,6 +138,16 @@ let%expect_test "RewriteFirst.rewrite_staged_spec (static)" =
       { ((((return 1; return 2); return 3); return 4); return 5) }
       >>> rewrite_staged_spec >>>
       (((return 1; return 2); return 3); (return 4; return 5))
+      |}]
+  in
+  let () =
+    test_rewrite_staged_spec ex3_rule ex3_target;
+    [%expect
+      {|
+      { {lhs = ((?s; ?t); ?u); rhs = (?s; (?t; ?u))} }
+      { (reset (return 10); x. ((return 2; return 3); return 4)) }
+      >>> rewrite_staged_spec >>>
+      (reset (return 10); x. (return 2; (return 3; return 4)))
       |}]
   in
   ()
