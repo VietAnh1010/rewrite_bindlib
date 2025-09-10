@@ -43,8 +43,8 @@ let ex2_target_box =
     (mk_return (mk_tint 5))
 
 let ex2_target = unbox ex2_target_box
-
 let ex3_rule = ex2_rule
+
 let ex3_target_box =
   mk_bind
     (mk_reset (mk_return (mk_tint 10)))
@@ -55,6 +55,22 @@ let ex3_target_box =
              (mk_return (mk_tint 4)))))
 
 let ex3_target = unbox ex3_target_box
+let ex4_lhs_box = mk_sequence (mk_ensures mk_ststate) (mk_smetavar s')
+let ex4_lhs = unbox ex4_lhs_box
+let ex4_rhs_box = mk_ensures mk_ststate
+let ex4_rhs = unbox ex4_rhs_box
+let ex4_rule = {lhs = ex4_lhs; rhs = Static ex4_rhs}
+
+let ex4_target_box =
+  mk_sequence
+    (mk_sequence
+       (mk_sequence
+          (mk_sequence (mk_ensures mk_ststate) (mk_return (mk_tint 1)))
+          (mk_return (mk_tint 2)))
+       (mk_return (mk_tint 3)))
+    (mk_return (mk_tint 4))
+
+let ex4_target = unbox ex4_target_box
 
 let%expect_test "RewriteAll.rewrite_staged_spec (static)" =
   let open RewriteAll in
@@ -100,6 +116,16 @@ let%expect_test "RewriteAll.rewrite_staged_spec (static)" =
       { (reset (return 10); x. ((return 2; return 3); return 4)) }
       >>> rewrite_staged_spec >>>
       (reset (return 10); x. (return 2; (return 3; return 4)))
+      |}]
+  in
+  let () =
+    test_rewrite_staged_spec ex4_rule ex4_target;
+    [%expect
+      {|
+      { {lhs = (ensures <ststate>; ?s); rhs = ensures <ststate>} }
+      { ((((ensures <ststate>; return 1); return 2); return 3); return 4) }
+      >>> rewrite_staged_spec >>>
+      ensures <ststate>
       |}]
   in
   ()
@@ -148,6 +174,16 @@ let%expect_test "RewriteFirst.rewrite_staged_spec (static)" =
       { (reset (return 10); x. ((return 2; return 3); return 4)) }
       >>> rewrite_staged_spec >>>
       (reset (return 10); x. (return 2; (return 3; return 4)))
+      |}]
+  in
+  let () =
+    test_rewrite_staged_spec ex4_rule ex4_target;
+    [%expect
+      {|
+      { {lhs = (ensures <ststate>; ?s); rhs = ensures <ststate>} }
+      { ((((ensures <ststate>; return 1); return 2); return 3); return 4) }
+      >>> rewrite_staged_spec >>>
+      (((ensures <ststate>; return 2); return 3); return 4)
       |}]
   in
   ()

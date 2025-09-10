@@ -18,12 +18,10 @@ module IntMSH = MakeMSH (Int)
 module IntMap = IntMSH.M
 module IntSet = IntMSH.S
 module IntHashtbl = IntMSH.H
-
 module MetavarMSH = MakeMSH (Metavar)
 module MetavarMap = MetavarMSH.M
 module MetavarSet = MetavarMSH.S
 module MetavarHashtbl = MetavarMSH.H
-
 module SymbolMSH = MakeMSH (Symbol)
 module SymbolMap = SymbolMSH.M
 module SymbolSet = SymbolMSH.S

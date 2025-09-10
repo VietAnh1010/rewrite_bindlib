@@ -37,7 +37,6 @@ type sort = Term | State | StagedSpec | StagedSpecBinder
 
 module Constructors = struct
   let new_tvar = new_var (fun v -> TVar v)
-
   let mk_tvar = box_var
   let mk_tsymbol s = box (TSymbol s)
   let mk_tunit = box TUnit
@@ -46,10 +45,8 @@ module Constructors = struct
   let mk_tpair = box_apply2 (fun t1 t2 -> TPair (t1, t2))
   let mk_tfun = box_apply (fun b -> TFun b)
   let mk_tmetavar mv = box (TMetavar mv)
-
   let mk_ststate = box StState
   let mk_stmetavar mv = box (StMetavar mv)
-
   let mk_return = box_apply (fun t -> Return t)
   let mk_ensures = box_apply (fun st -> Ensures st)
   let mk_sequence = box_apply2 (fun s1 s2 -> Sequence (s1, s2))
@@ -61,7 +58,6 @@ module Constructors = struct
   let mk_reset = box_apply (fun s -> Reset s)
   let mk_dollar = box_apply2 (fun s k -> Dollar (s, k))
   let mk_smetavar mv = box (SMetavar mv)
-
   let mk_binder = box_apply (fun b -> Binder b)
   let mk_ignore = box_apply (fun s -> Ignore s)
   let mk_sbmetavar mv = box (SBMetavar mv)

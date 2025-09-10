@@ -7,23 +7,18 @@ open Uobj
 type subst = uobj MetavarMap.t
 
 let empty = MetavarMap.empty
-
 let add = MetavarMap.add
 let find_opt = MetavarMap.find_opt
-
 let adds f mv t = add mv (f t)
 let find_opts f mv sigma = Option.map f (find_opt mv sigma)
-
 let add_term = adds uobj_of_term
 let add_state = adds uobj_of_state
 let add_staged_spec = adds uobj_of_staged_spec
 let add_staged_spec_binder = adds uobj_of_staged_spec_binder
-
 let find_term_opt = find_opts term_of_uobj
 let find_state_opt = find_opts state_of_uobj
 let find_staged_spec_opt = find_opts staged_spec_of_uobj
 let find_staged_spec_binder_opt = find_opts staged_spec_binder_of_uobj
-
 let string_of_subst _sigma = Format.sprintf "%s" "[]"
 
 exception Substitution_failure
