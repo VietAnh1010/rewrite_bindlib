@@ -51,25 +51,7 @@ module RewriteExact = struct
     rewrite_with unify_staged_spec_binder subst_staged_spec_binder rule
 end
 
-module type Core = sig
-  module M : Monad.S
-
-  val lift : ('rule -> 'ctxt -> 'a -> 'a) -> 'rule -> 'ctxt -> 'a -> 'a M.t
-
-  val wrap :
-    ('self -> 'rule -> 'ctxt -> 'a -> 'a M.t) ->
-    'self ->
-    'rule ->
-    'ctxt ->
-    'a ->
-    'a M.t
-
-  val run : ('rule -> 'ctxt -> 'a -> 'a M.t) -> 'rule -> 'ctxt -> 'a -> 'a
-end
-
-module Make (C : Core) = struct
-  include C
-
+module Make (M : Monad.S) = struct
   type ('ctxt, 'a) rewriter = {
     rw_term : ('ctxt, 'a, term) rewriter_method;
     rw_state : ('ctxt, 'a, state) rewriter_method;
@@ -79,11 +61,6 @@ module Make (C : Core) = struct
 
   and ('ctxt, 'a, 'b) rewriter_method =
     ('ctxt, 'a) rewriter -> ('ctxt, 'a) rule -> 'ctxt -> 'b -> 'b M.t
-
-  let visit_with rewrite visit (self : 'self) (rule : 'rule) (ctxt : 'ctxt)
-      (target : 'a) =
-    try lift rewrite rule ctxt target
-    with Rewrite_failure -> visit self rule ctxt target
 
   open M
   open LetSyntax
@@ -160,12 +137,12 @@ module Make (C : Core) = struct
         Ignore s
     | SBMetavar _ -> return b
 
-  module BaseRewriter = struct
-    let rw_term self = wrap visit_term self
-    let rw_state self = wrap visit_state self
-    let rw_staged_spec self = wrap visit_staged_spec self
-    let rw_staged_spec_binder self = wrap visit_staged_spec_binder self
-    let rewriter = {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
+  module type AbstractRewriter = sig
+    val rw_term : ('ctxt, 'a, term) rewriter_method
+    val rw_state : ('ctxt, 'a, state) rewriter_method
+    val rw_staged_spec : ('ctxt, 'a, staged_spec) rewriter_method
+    val rw_staged_spec_binder : ('ctxt, 'a, staged_spec_binder) rewriter_method
+    val rewriter : ('ctxt, 'a) rewriter
   end
 
   module type ConcreteRewriter = sig
@@ -177,45 +154,66 @@ module Make (C : Core) = struct
     val rw_staged_spec_binder : ('ctxt, t, staged_spec_binder) rewriter_method
     val rewriter : ('ctxt, t) rewriter
   end
+end
 
+module RewriteAll = struct
+  module M = Monad.Identity
+  include Make (M)
+  open M.LetSyntax
   open RewriteExact
 
-  module TermRewriter = struct
+  module BaseRewriter : AbstractRewriter = struct
+    let rw_term = visit_term
+    let rw_state = visit_state
+    let rw_staged_spec = visit_staged_spec
+    let rw_staged_spec_binder = visit_staged_spec_binder
+    let rewriter = {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
+  end
+
+  let rw_with rewrite recur visit self rule ctxt target =
+    let* result = visit self rule ctxt target in
+    try recur self rule ctxt (rewrite rule ctxt result)
+    with Rewrite_failure -> M.return result
+
+  module TermRewriter : ConcreteRewriter with type t = term = struct
     type t = term
 
     include BaseRewriter
 
-    let rw_term self = wrap (visit_with rewrite_term visit_term) self
+    let rec rw_term self = rw_with rewrite_term rw_term visit_term self
     let rewriter = {rewriter with rw_term}
   end
 
-  module StateRewriter = struct
+  module StateRewriter : ConcreteRewriter with type t = state = struct
     type t = state
 
     include BaseRewriter
 
-    let rw_state self = wrap (visit_with rewrite_state visit_state) self
+    let rec rw_state self = rw_with rewrite_state rw_state visit_state self
     let rewriter = {rewriter with rw_state}
   end
 
-  module StagedSpecRewriter = struct
+  module StagedSpecRewriter : ConcreteRewriter with type t = staged_spec =
+  struct
     type t = staged_spec
 
     include BaseRewriter
 
-    let rw_staged_spec self =
-      wrap (visit_with rewrite_staged_spec visit_staged_spec) self
+    let rec rw_staged_spec self =
+      rw_with rewrite_staged_spec rw_staged_spec visit_staged_spec self
 
     let rewriter = {rewriter with rw_staged_spec}
   end
 
-  module StagedSpecBinderRewriter = struct
+  module StagedSpecBinderRewriter :
+    ConcreteRewriter with type t = staged_spec_binder = struct
     type t = staged_spec_binder
 
     include BaseRewriter
 
-    let rw_staged_spec_binder self =
-      wrap (visit_with rewrite_staged_spec_binder visit_staged_spec_binder) self
+    let rec rw_staged_spec_binder self =
+      rw_with rewrite_staged_spec_binder rw_staged_spec_binder
+        visit_staged_spec_binder self
 
     let rewriter = {rewriter with rw_staged_spec_binder}
   end
@@ -233,10 +231,12 @@ module Make (C : Core) = struct
       ('ctxt, t) rule -> 'ctxt -> staged_spec_binder -> staged_spec_binder
   end
 
-  module Tie (R : ConcreteRewriter) : S with type t = R.t = struct
-    type t = R.t
+  let run rewrite rule ctxt target = M.run (rewrite rule ctxt target)
 
-    open R
+  module Tie (RW : ConcreteRewriter) : S with type t = RW.t = struct
+    type t = RW.t
+
+    open RW
 
     let rewrite_term rule = run (rw_term rewriter) rule
     let rewrite_state rule = run (rw_state rewriter) rule
@@ -252,28 +252,106 @@ module Make (C : Core) = struct
   module StagedSpecBinder = Tie (StagedSpecBinderRewriter)
 end
 
-module RewriteAll = Make (struct
-  module M = Monad.Identity
-
-  let wrap rw = rw
-  let lift rewrite rule ctxt target = M.return (rewrite rule ctxt target)
-  let run rewrite rule ctxt target = M.run (rewrite rule ctxt target)
-end)
-
-module RewriteFirst = Make (struct
+module RewriteFirst = struct
   module M = Monad.State (Bool)
+  include Make (M)
   open M.LetSyntax
+  open RewriteExact
 
-  let lift rewrite rule ctxt target =
-    let result = rewrite rule ctxt target in
-    let+ _ = M.put true in
-    result
-
-  let wrap rw self rule ctxt target =
+  let rw_base visit self rule ctxt target =
     let* applied = M.get in
-    if applied then M.return target else rw self rule ctxt target
+    if applied then M.return target else visit self rule ctxt target
+
+  module BaseRewriter : AbstractRewriter = struct
+    let rw_term self = rw_base visit_term self
+    let rw_state self = rw_base visit_state self
+    let rw_staged_spec self = rw_base visit_staged_spec self
+    let rw_staged_spec_binder self = rw_base visit_staged_spec_binder self
+    let rewriter = {rw_term; rw_state; rw_staged_spec; rw_staged_spec_binder}
+  end
+
+  let rw_with rewrite visit self rule ctxt target =
+    let* applied = M.get in
+    if applied then M.return target
+    else
+      try
+        let result = rewrite rule ctxt target in
+        let+ () = M.put true in
+        result
+      with Rewrite_failure -> visit self rule ctxt target
+
+  module TermRewriter : ConcreteRewriter with type t = term = struct
+    type t = term
+
+    include BaseRewriter
+
+    let rw_term self = rw_with rewrite_term visit_term self
+    let rewriter = {rewriter with rw_term}
+  end
+
+  module StateRewriter : ConcreteRewriter with type t = state = struct
+    type t = state
+
+    include BaseRewriter
+
+    let rw_state self = rw_with rewrite_state visit_state self
+    let rewriter = {rewriter with rw_state}
+  end
+
+  module StagedSpecRewriter : ConcreteRewriter with type t = staged_spec =
+  struct
+    type t = staged_spec
+
+    include BaseRewriter
+
+    let rw_staged_spec self = rw_with rewrite_staged_spec visit_staged_spec self
+    let rewriter = {rewriter with rw_staged_spec}
+  end
+
+  module StagedSpecBinderRewriter :
+    ConcreteRewriter with type t = staged_spec_binder = struct
+    type t = staged_spec_binder
+
+    include BaseRewriter
+
+    let rw_staged_spec_binder self =
+      rw_with rewrite_staged_spec_binder visit_staged_spec_binder self
+
+    let rewriter = {rewriter with rw_staged_spec_binder}
+  end
+
+  module type S = sig
+    type t
+
+    val rewrite_term : ('ctxt, t) rule -> 'ctxt -> term -> term
+    val rewrite_state : ('ctxt, t) rule -> 'ctxt -> state -> state
+
+    val rewrite_staged_spec :
+      ('ctxt, t) rule -> 'ctxt -> staged_spec -> staged_spec
+
+    val rewrite_staged_spec_binder :
+      ('ctxt, t) rule -> 'ctxt -> staged_spec_binder -> staged_spec_binder
+  end
 
   let run rewrite rule ctxt target =
     let result, applied = M.run (rewrite rule ctxt target) false in
     if applied then result else raise Rewrite_failure
-end)
+
+  module Tie (RW : ConcreteRewriter) : S with type t = RW.t = struct
+    type t = RW.t
+
+    open RW
+
+    let rewrite_term rule = run (rw_term rewriter) rule
+    let rewrite_state rule = run (rw_state rewriter) rule
+    let rewrite_staged_spec rule = run (rw_staged_spec rewriter) rule
+
+    let rewrite_staged_spec_binder rule =
+      run (rw_staged_spec_binder rewriter) rule
+  end
+
+  module Term = Tie (TermRewriter)
+  module State = Tie (StateRewriter)
+  module StagedSpec = Tie (StagedSpecRewriter)
+  module StagedSpecBinder = Tie (StagedSpecBinderRewriter)
+end
